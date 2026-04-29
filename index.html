@@ -102,6 +102,31 @@ function totalWeeklyCost(){
   return c.directLabour+c.overheadLabour+c.operatingOverheads+c.debtRepayment;
 }
 
+// ── TIMEZONE-SAFE DATE HELPERS ─────────────────────────────
+// FIX: Date handling must use LOCAL (NZ) time, not UTC.
+// new Date().toISOString() returns UTC, which is 12-13 hours behind NZ.
+// On a NZ Monday morning, that returns Sunday's date — causing timesheets
+// to show under the wrong day. Use these helpers everywhere instead.
+function toLocalISODate(d){
+  // Returns YYYY-MM-DD in the LOCAL timezone (no UTC drift)
+  const dt=d instanceof Date?d:new Date(d);
+  if(isNaN(dt.getTime()))return"";
+  const y=dt.getFullYear();
+  const m=String(dt.getMonth()+1).padStart(2,"0");
+  const day=String(dt.getDate()).padStart(2,"0");
+  return y+"-"+m+"-"+day;
+}
+function parseLocalDate(dateStr){
+  // Parse a YYYY-MM-DD string as LOCAL midnight, not UTC midnight.
+  // new Date("2026-04-28") parses as UTC -> wrong day in NZ.
+  // new Date("2026-04-28T00:00:00") parses as local -> correct.
+  if(!dateStr||typeof dateStr!=="string")return new Date(dateStr);
+  // If already has time component, keep it
+  if(dateStr.includes("T"))return new Date(dateStr);
+  return new Date(dateStr+"T00:00:00");
+}
+function todayLocalISO(){return toLocalISODate(new Date());}
+
 const CERT_TYPES=[
   {id:"heights",name:"Working at Heights",icon:"🏗️",color:"#dc2626",description:"Working at Heights certification (NZQA Unit Standard 23229)"},
   {id:"harness",name:"Harness / Fall Arrest",icon:"🪢",color:"#ea580c",description:"Harness inspection and fall arrest training"},
@@ -1782,7 +1807,7 @@ function JSAModal({job,existing,onSave,onClose}){
     {hazard:"Weather (wind/rain)",severity:"Medium",control:"Check forecast, stop work if wind >35 km/h or wet"},
   ];
   const[fm,setFm]=React.useState(existing||{
-    dateCompleted:new Date().toISOString().split("T")[0],
+    dateCompleted:todayLocalISO(),
     supervisor:"",
     hazards:defaultHazards.map(h=>({...h,active:true})),
     crewAcknowledged:[],
@@ -1913,7 +1938,7 @@ function JSAModal({job,existing,onSave,onClose}){
 // ── Variations Modal ──────────────────────────────────────
 function VariationsModal({job,variations,onSave,onClose}){
   const[list,setList]=React.useState(variations||[]);
-  const[newVar,setNewVar]=React.useState({description:"",amount:"",dateAdded:new Date().toISOString().split("T")[0],approved:false,approvedBy:"",photoIds:[]});
+  const[newVar,setNewVar]=React.useState({description:"",amount:"",dateAdded:todayLocalISO(),approved:false,approvedBy:"",photoIds:[]});
   const inp={width:"100%",padding:"8px 10px",border:"1.5px solid #e5e7eb",borderRadius:7,fontSize:12,boxSizing:"border-box"};
   const lb={display:"block",fontSize:10,fontWeight:700,color:"#374151",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4};
   
@@ -1921,7 +1946,7 @@ function VariationsModal({job,variations,onSave,onClose}){
     if(!newVar.description.trim()){alert("Please add a description");return;}
     const amt=Number(newVar.amount)||0;
     setList([...list,{...newVar,id:Date.now(),amount:amt}]);
-    setNewVar({description:"",amount:"",dateAdded:new Date().toISOString().split("T")[0],approved:false,approvedBy:"",photoIds:[]});
+    setNewVar({description:"",amount:"",dateAdded:todayLocalISO(),approved:false,approvedBy:"",photoIds:[]});
   }
   function removeVariation(id){
     setList(list.filter(v=>v.id!==id));
@@ -2012,7 +2037,7 @@ function VariationsModal({job,variations,onSave,onClose}){
 // ── Completion Report Modal ───────────────────────────────
 function CompletionModal({job,existing,clients,onSave,onClose}){
   const[fm,setFm]=React.useState(existing||{
-    dateCompleted:new Date().toISOString().split("T")[0],
+    dateCompleted:todayLocalISO(),
     scopeCompleted:job.notes||"",
     materialsUsed:"",
     hoursOnSite:"",
@@ -2109,7 +2134,7 @@ function CompletionModal({job,existing,clients,onSave,onClose}){
 function RoofReportModal({job,existing,onSave,onClose}){
   const[fm,setFm]=React.useState(existing||{
     // Inspection details
-    dateCompleted:new Date().toISOString().split("T")[0],
+    dateCompleted:todayLocalISO(),
     workOrderNumber:"",
     requestedBy:"",
     conductedBy:"",
@@ -2248,7 +2273,7 @@ function RoofReportModal({job,existing,onSave,onClose}){
 // ── Job Report Modal (simplified inline version) ─────────
 function JobReportModal({job,existing,onSave,onClose}){
   const[fm,setFm]=React.useState(existing||{
-    dateCompleted:new Date().toISOString().split("T")[0],
+    dateCompleted:todayLocalISO(),
     reportedBy:"",
     poNumber:"",
     investigationNotes:"",
@@ -2357,7 +2382,7 @@ function QAReportModal({job,existing,onSave,onClose}){
   ];
   
   const[fm,setFm]=React.useState(existing||{
-    dateCompleted:new Date().toISOString().split("T")[0],
+    dateCompleted:todayLocalISO(),
     inspectedBy:"Taylor Smith", // Supervisor — does the QA walkthrough on site
     lbpName:"Fasa Sopi",         // Licensed Building Practitioner — signs off legally
     lbpNumber:"",                // Auto-loaded from cloud settings once saved
@@ -2548,7 +2573,7 @@ function QAReportModal({job,existing,onSave,onClose}){
               {fm.signedOff?"✓ LBP Sign-Off Complete":"⚠️ LBP Sign-Off Pending"}
             </div>
             <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,fontWeight:700,color:fm.signedOff?"#14532d":"#9a3412"}}>
-              <input type="checkbox" checked={fm.signedOff} onChange={e=>setFm(f=>({...f,signedOff:e.target.checked,signOffDate:e.target.checked?(f.signOffDate||new Date().toISOString().split("T")[0]):""}))} style={{width:16,height:16,cursor:"pointer"}}/>
+              <input type="checkbox" checked={fm.signedOff} onChange={e=>setFm(f=>({...f,signedOff:e.target.checked,signOffDate:e.target.checked?(f.signOffDate||todayLocalISO()):""}))} style={{width:16,height:16,cursor:"pointer"}}/>
               Sign off
             </label>
           </div>
@@ -2690,7 +2715,8 @@ function JobsView({jobs,setJobs,clients,setClients,quotes=[],setQuotes,setTab,us
   
   function formatDateFriendly(dateStr){
     if(!dateStr)return"";
-    const d=new Date(dateStr);
+    // FIX: parse as LOCAL date so day-of-week matches NZ time, not UTC
+    const d=parseLocalDate(dateStr);
     const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
     return days[d.getDay()]+", "+d.getDate()+" "+months[d.getMonth()]+" "+d.getFullYear();
@@ -2748,7 +2774,7 @@ function JobsView({jobs,setJobs,clients,setClients,quotes=[],setQuotes,setTab,us
     setParsing(true);
     setParserError("");
     try{
-      const today=new Date().toISOString().split("T")[0];
+      const today=todayLocalISO();
       const basePrompt="You are a job intake assistant for The Roof Hub, a roofing company in Auckland NZ. Today is "+today+". Extract job details from the "+(parserMode==="photo"?"job card image":"customer email")+".\n\n"+(parserMode==="photo"?"This will usually be a job card or work order sent from a Property Manager (printed or handwritten). It may contain a client name, address, job description, urgency, reference number, and contact details. Read ALL visible text carefully, including handwriting.\n\n":"")+"Respond with ONLY valid JSON (no markdown, no explanation) in this exact format:\n{\n  \"client\": \"full name or business name (the end-customer/tenant, NOT the property manager)\",\n  \"email\": \"email address or empty string\",\n  \"phone\": \"phone number or empty string\",\n  \"address\": \"full site address or empty string\",\n  \"type\": \"one of: Roof Repair, Full Re-roof, QA Inspection, Gutter Replacement, Leak Investigation, Flashing Repair, Quote/Measure, New Build Roof\",\n  \"suggestedDate\": \"YYYY-MM-DD format date if mentioned, or empty string\",\n  \"notes\": \"brief summary - include job description, urgency, reference/PO number, property manager name if visible, any other key details\",\n  \"propertyManager\": \"property manager/company name if visible (e.g. Spencer Henshaw, Oakridge, Ray White), or empty string\",\n  \"referenceNumber\": \"work order number or reference if visible, or empty string\",\n  \"confidence\": \"high/medium/low\"\n}\n\nGuidelines:\n- For 'type', pick the best match based on description\n- For 'suggestedDate', convert phrases to actual dates based on today ("+today+")\n- For 'notes', be thorough - property managers often include important context\n- If information is missing, use empty string — don't invent data";
       
       const messages=[];
@@ -3689,7 +3715,7 @@ function CalendarView({jobs,setJobs,clients,events=[]}){
 
 // ── SCHEDULE (with quick-add job & address autocomplete) ───────
 function ScheduleView({jobs,setJobs,resetTick,clients=[],setClients}){
-  const today=new Date().toISOString().split("T")[0];
+  const today=todayLocalISO();
   const[showAdd,setShowAdd]=React.useState(false);
   const[quickAssignStaff,setQuickAssignStaff]=React.useState(null); // staff id for quick-assign modal
   const bl={client:"",address:"",type:"Roof Repair",status:"scheduled",date:"",staff:[],notes:"",phone:"",email:""};
@@ -3839,7 +3865,7 @@ function ScheduleView({jobs,setJobs,resetTick,clients=[],setClients}){
       </div>
       
       {/* Quick-assign modal: shown when a staff card is tapped */}
-      {quickAssignStaff&&<QuickAssignModal staffId={quickAssignStaff} jobs={jobs} setJobs={setJobs} onClose={()=>setQuickAssignStaff(null)} onOpenNewJob={()=>{setQuickAssignStaff(null);setFm({...bl,staff:[quickAssignStaff],date:new Date().toISOString().split("T")[0]});setShowAdd(true);window.scrollTo({top:0,behavior:"smooth"});}}/>}
+      {quickAssignStaff&&<QuickAssignModal staffId={quickAssignStaff} jobs={jobs} setJobs={setJobs} onClose={()=>setQuickAssignStaff(null)} onOpenNewJob={()=>{setQuickAssignStaff(null);setFm({...bl,staff:[quickAssignStaff],date:todayLocalISO()});setShowAdd(true);window.scrollTo({top:0,behavior:"smooth"});}}/>}
     </div>
   );
 }
@@ -3849,7 +3875,7 @@ function ScheduleView({jobs,setJobs,resetTick,clients=[],setClients}){
 function QuickAssignModal({staffId,jobs,setJobs,onClose,onOpenNewJob}){
   const staff=STAFF.find(s=>s.id===staffId);
   if(!staff)return null;
-  const today=new Date().toISOString().split("T")[0];
+  const today=todayLocalISO();
   const[tab,setTab]=React.useState("assign"); // "assign" | "teammates"
   const[selectedJob,setSelectedJob]=React.useState(null);
   
@@ -3883,7 +3909,8 @@ function QuickAssignModal({staffId,jobs,setJobs,onClose,onOpenNewJob}){
   
   function formatJobDate(d){
     if(!d)return"";
-    const dt=new Date(d);
+    // FIX: parse as LOCAL date so day-of-week is right in NZ
+    const dt=parseLocalDate(d);
     const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     return days[dt.getDay()]+" "+dt.getDate()+"/"+(dt.getMonth()+1);
   }
@@ -4010,8 +4037,8 @@ function DashboardView({user,jobs,setJobs,ts,events=[],incidents=[],quotes=[],se
   const emoji=hour<12?"🌅":hour<17?"☀️":"🌙";
   
   // Today's date in YYYY-MM-DD
-  const todayStr=new Date().toISOString().split("T")[0];
-  const tomorrowStr=new Date(Date.now()+86400000).toISOString().split("T")[0];
+  const todayStr=todayLocalISO();
+  const tomorrowStr=toLocalISODate(new Date(Date.now()+86400000));
   
   // Today's jobs — all of them if owner/admin, just mine if employee
   const allTodayJobs=jobs.filter(j=>{
@@ -4033,12 +4060,13 @@ function DashboardView({user,jobs,setJobs,ts,events=[],incidents=[],quotes=[],se
   const myTomorrowJobs=myStaff?allTomorrowJobs.filter(j=>(j.staff||[]).includes(myStaff.id)):[];
   const tomorrowJobs=myStaff&&!isOwner?myTomorrowJobs:allTomorrowJobs;
   
-  // This week's hours (Mon-Sun)
+  // This week's hours (Mon-Sun) — FIX: use local time, not UTC
   const today=new Date();
-  const mon=new Date(today);
-  mon.setDate(today.getDate()-today.getDay()+1);
-  const ws=mon.toISOString().split("T")[0];
-  const we=new Date(mon.getTime()+6*86400000).toISOString().split("T")[0];
+  const mon=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  mon.setDate(mon.getDate()+(mon.getDay()===0?-6:1-mon.getDay()));
+  const sun=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+6);
+  const ws=toLocalISODate(mon);
+  const we=toLocalISODate(sun);
   const myWeekTs=myStaff?ts.filter(t=>t.staffId===myStaff.id&&t.date>=ws&&t.date<=we):[];
   const myWeekHours=myWeekTs.reduce((a,t)=>a+calcPaidHours(t.clockIn,t.clockOut),0);
   const myTodayTs=myStaff?ts.filter(t=>t.staffId===myStaff.id&&t.date===todayStr):[];
@@ -4339,11 +4367,17 @@ function TimesheetsView({jobs,ts,setTs,user}){
   // Auto-select the logged-in user's own card by default (so they see their own stuff first)
   const[selStaff,setSelStaff]=React.useState(myStaff?.id||null);
   const[selDay,setSelDay]=React.useState(null); // YYYY-MM-DD of day being inspected
-  const bl={staffId:myStaff?.id||"",jobId:"",date:new Date().toISOString().split("T")[0],clockIn:"",clockOut:"",notes:""};
+  const bl={staffId:myStaff?.id||"",jobId:"",date:todayLocalISO(),clockIn:"",clockOut:"",notes:""};
   const[en,setEn]=React.useState(bl);
-  const today=new Date();const mon=new Date(today);mon.setDate(today.getDate()-today.getDay()+1+wk*7);
-  const ws=mon.toISOString().split("T")[0];const we=new Date(mon.getTime()+6*86400000).toISOString().split("T")[0];
-  const wl=mon.toLocaleDateString("en-NZ",{day:"numeric",month:"short"})+" – "+new Date(mon.getTime()+6*86400000).toLocaleDateString("en-NZ",{day:"numeric",month:"short",year:"numeric"});
+  // FIX: Build week start in LOCAL time. getDay()=0 means Sunday; we want Mon=1.
+  const today=new Date();
+  const mon=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const offset=(mon.getDay()===0?-6:1-mon.getDay())+wk*7;
+  mon.setDate(mon.getDate()+offset);
+  const sun=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+6);
+  const ws=toLocalISODate(mon);
+  const we=toLocalISODate(sun);
+  const wl=mon.toLocaleDateString("en-NZ",{day:"numeric",month:"short"})+" – "+sun.toLocaleDateString("en-NZ",{day:"numeric",month:"short",year:"numeric"});
   const filt=ts.filter(t=>t.date>=ws&&t.date<=we&&(!selStaff||t.staffId===selStaff));
   const totH=t=>t.reduce((a,x)=>a+calcPaidHours(x.clockIn,x.clockOut),0);
   function add(){
@@ -4443,11 +4477,12 @@ function TimesheetsView({jobs,ts,setTs,user}){
         // Day-by-day
         const days=[];
         for(let i=0;i<7;i++){
-          const d=new Date(mon);d.setDate(mon.getDate()+i);
-          const dateStr=d.toISOString().split("T")[0];
+          // FIX: use local-time date, not UTC
+          const d=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i);
+          const dateStr=toLocalISODate(d);
           const dayTs=staffTs.filter(t=>t.date===dateStr);
           const dayH=dayTs.reduce((a,t)=>a+calcPaidHours(t.clockIn,t.clockOut),0);
-          days.push({date:dateStr,dayName:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i],dayNum:d.getDate(),hours:dayH,entries:dayTs,isToday:dateStr===new Date().toISOString().split("T")[0],isWeekend:i>=5});
+          days.push({date:dateStr,dayName:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i],dayNum:d.getDate(),hours:dayH,entries:dayTs,isToday:dateStr===todayLocalISO(),isWeekend:i>=5});
         }
         
         const jobsWorked=[...new Set(staffTs.map(t=>t.jobId).filter(Boolean))].map(jid=>jobs.find(j=>j.id===jid)).filter(Boolean);
@@ -4815,7 +4850,7 @@ function IncidentRegister({incidents,setIncidents,jobs,onBack}){
   const[yearFilter,setYearFilter]=React.useState("all");
   const[typeFilter,setTypeFilter]=React.useState("all");
   const bl={
-    date:new Date().toISOString().split("T")[0],
+    date:todayLocalISO(),
     time:"",
     type:"near-miss",
     severity:"minor",
@@ -4829,7 +4864,7 @@ function IncidentRegister({incidents,setIncidents,jobs,onBack}){
     contributingFactors:"",
     preventativeAction:"",
     reportedBy:"Fasa Sopi",
-    reportedDate:new Date().toISOString().split("T")[0],
+    reportedDate:todayLocalISO(),
     linkedJobId:"",
     worksafeNotified:false,
     worksafeRefNumber:"",
@@ -4859,7 +4894,7 @@ function IncidentRegister({incidents,setIncidents,jobs,onBack}){
     }
   }
   function closeOut(inc){
-    const date=prompt("Closeout date (YYYY-MM-DD):",new Date().toISOString().split("T")[0]);
+    const date=prompt("Closeout date (YYYY-MM-DD):",todayLocalISO());
     if(!date)return;
     const by=prompt("Closed out by:","Fasa Sopi");
     if(!by)return;
@@ -4885,7 +4920,7 @@ function IncidentRegister({incidents,setIncidents,jobs,onBack}){
     const csv=[h,...rows].map(r=>r.map(x=>'"'+String(x||"").replace(/"/g,'""')+'"').join(",")).join("\n");
     const blob=new Blob([csv],{type:"text/csv"});
     const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=url;a.download="incident-register-"+new Date().toISOString().split("T")[0]+".csv";a.click();URL.revokeObjectURL(url);
+    const a=document.createElement("a");a.href=url;a.download="incident-register-"+todayLocalISO()+".csv";a.click();URL.revokeObjectURL(url);
   }
 
   // Build list of years available (4 years back + current)
@@ -5156,7 +5191,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
   const[statusFilter,setStatusFilter]=React.useState("all");
   const[searchTerm,setSearchTerm]=React.useState("");
   
-  const today=new Date().toISOString().split("T")[0];
+  const today=todayLocalISO();
   const validTo=new Date();validTo.setDate(validTo.getDate()+30);
   const bl={
     quoteNumber:"",
@@ -5165,7 +5200,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
     phone:"",
     address:"",
     date:today,
-    validUntil:validTo.toISOString().split("T")[0],
+    validUntil:toLocalISODate(validTo),
     items:[{desc:"",qty:1,unit:"m²",rate:0}],
     notes:"",
     terms:"QUOTE VALIDITY\nThis quote is valid for 30 days from the date issued. After this period, pricing is subject to change due to material costs and availability.\n\nACCEPTANCE\nAcceptance of this quote must be in writing (email confirmation or signed quote). A deposit may be required on jobs over $10,000 to secure materials and scheduling.\n\nPAYMENT TERMS\n- Payment is due within 7 days of invoice date unless otherwise agreed in writing\n- Progress payments may be required on jobs over 5 working days\n- Overdue accounts incur 2% monthly interest and may be referred to debt collection at the client's cost\n- Preferred payment by direct bank transfer. Bank details provided on invoice\n\nSCOPE OF WORK\nThis quote covers only the work described. Any additional work required (e.g. rotten timber, unforeseen structural issues, additional flashings) will be quoted separately and approved by the client before proceeding.\n\nMATERIALS & WORKMANSHIP\n- All new materials come with the manufacturer's warranty (typically 10-30 years depending on product)\n- Our workmanship is guaranteed for 10 years from completion date\n- Warranty does not cover damage from storms, impact, negligence, or modifications by other parties\n\nACCESS & SITE CONDITIONS\n- Client to provide safe access to the roof, power, and water if required\n- The Roof Hub is not responsible for pre-existing damage to gutters, flashings, or fragile roof surfaces not covered in this quote\n- Client to secure pets and remove valuables from working areas\n\nWEATHER & DELAYS\nRoofing work is weather-dependent. We may need to reschedule due to rain, high winds, or extreme heat for the safety of our team and quality of work. We will communicate any delays promptly.\n\nHEALTH & SAFETY\nAll work complies with the Health and Safety at Work Act 2015. A Site Specific Safety Plan (SSSP) will be provided for jobs requiring one. Clients and occupants must stay clear of working areas while work is in progress.\n\nINSURANCE\nThe Roof Hub Limited carries public liability insurance. A copy of our certificate of currency is available on request.\n\nCANCELLATION\nIf work is cancelled after materials have been ordered, the client is liable for material costs plus a 15% administration fee. Cancellations within 48 hours of scheduled start incur a $500 scheduling fee.\n\nDISPUTES\nAny disputes will first be resolved through direct discussion. If unresolved, both parties agree to mediation before pursuing legal action.\n\nGST\nAll prices include GST at 15% unless otherwise stated.",
@@ -5250,7 +5285,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
   }
   
   function markStatus(q,newStatus){
-    const date=new Date().toISOString().split("T")[0];
+    const date=todayLocalISO();
     const updated={...q,status:newStatus};
     if(newStatus==="sent")updated.sentDate=date;
     if(newStatus==="accepted"||newStatus==="declined")updated.decisionDate=date;
@@ -5268,7 +5303,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
       phone:q.phone||"",
       type:"Full Re-roof",
       status:"scheduled",
-      date:new Date().toISOString().split("T")[0],
+      date:todayLocalISO(),
       endDate:"",
       startTime:"07:00",
       endTime:"15:30",
@@ -5281,7 +5316,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
       quoteNumber:q.quoteNumber,
     };
     setJobs(j=>[...j,newJob]);
-    setQuotes(quotes.map(x=>x.id===q.id?{...x,status:"accepted",decisionDate:new Date().toISOString().split("T")[0],convertedToJobId:newJob.id}:x));
+    setQuotes(quotes.map(x=>x.id===q.id?{...x,status:"accepted",decisionDate:todayLocalISO(),convertedToJobId:newJob.id}:x));
     alert("✅ Job created!\n\nQuote marked as Accepted.\nGo to Work → Jobs to schedule it.");
     if(setTab)setTab("calendar");
   }
@@ -7145,12 +7180,12 @@ function TeamView({ts=[],jobs=[],certs=[],setCerts}){
         const{start}=getWeekRange(weekOffset);
         const days=[];
         for(let i=0;i<7;i++){
-          const d=new Date(start);
-          d.setDate(start.getDate()+i);
-          const dateStr=d.toISOString().split("T")[0];
+          // FIX: build day in local time, not UTC
+          const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
+          const dateStr=toLocalISODate(d);
           const dayTs=weekTs.filter(t=>t.date===dateStr);
           const dayHours=dayTs.reduce((sum,t)=>sum+calcHours(t.clockIn,t.clockOut),0);
-          days.push({date:dateStr,dayName:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i],dayNum:d.getDate(),hours:dayHours,entries:dayTs,isToday:dateStr===new Date().toISOString().split("T")[0],isWeekend:i>=5});
+          days.push({date:dateStr,dayName:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i],dayNum:d.getDate(),hours:dayHours,entries:dayTs,isToday:dateStr===todayLocalISO(),isWeekend:i>=5});
         }
         
         // Weekly ordinary hours threshold for overtime
@@ -7298,7 +7333,7 @@ function ToolboxView({jobs}){
   const[mode,setMode]=React.useState("list");
   const[meetings,setMeetings]=React.useState([]);
   const blank={
-    date:new Date().toISOString().split("T")[0],
+    date:todayLocalISO(),
     time:new Date().toTimeString().slice(0,5),
     jobId:"",
     foreman:1,
@@ -7536,7 +7571,7 @@ function SSSPView({jobs,setJobs}){
     emergencyProcedure:"",
     specificInstructions:"",
     signedBy:"David Sopi",
-    signedDate:new Date().toISOString().split("T")[0],
+    signedDate:todayLocalISO(),
   };
   const[s,setS]=React.useState(blankSSSP);
 
@@ -8089,7 +8124,7 @@ function ClientsView({clients,setClients,jobs}){
     const blob=new Blob([csv],{type:"text/csv"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    a.href=url;a.download="roofhub-clients-"+new Date().toISOString().split("T")[0]+".csv";
+    a.href=url;a.download="roofhub-clients-"+todayLocalISO()+".csv";
     a.click();URL.revokeObjectURL(url);
   }
 
@@ -9036,7 +9071,7 @@ function App({user,onSignOut}){
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url;
-    a.download="roofhub-backup-"+new Date().toISOString().split("T")[0]+".json";
+    a.download="roofhub-backup-"+todayLocalISO()+".json";
     a.click();
     URL.revokeObjectURL(url);
   }
