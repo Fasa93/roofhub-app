@@ -6037,6 +6037,7 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
             <div style={{fontSize:11,color:"#166534"}}>Create quotes · Email to clients · Convert to jobs when accepted</div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <a href="./roof-measure-tool.html" target="_blank" rel="noopener" title="Measure roof from satellite imagery" style={{background:"#fff",color:"#cc0000",border:"1.5px solid #cc0000",padding:"7px 12px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:12,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>📐 Measure Roof</a>
             <a href="./price-book.pdf" target="_blank" rel="noopener" title="Open Roof Hub price book in a new tab" style={{background:"#fff",color:"#16a34a",border:"1.5px solid #16a34a",padding:"7px 12px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:12,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>📖 Price Book</a>
             <button onClick={openAdd} style={{background:"#16a34a",color:"#fff",border:"none",padding:"8px 16px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:12}}>+ New Quote</button>
           </div>
@@ -8654,6 +8655,58 @@ function PricebookView(){
   );
 }
 
+// ── ROOF MEASURE VIEW ─────────────────────────────────────────
+// Embeds the satellite-based roof measurement tool inline. The tool is a
+// standalone HTML at /roof-measure-tool.html (alongside index.html).
+function MeasureView(){
+  const[loaded,setLoaded]=React.useState(false);
+  const[error,setError]=React.useState(false);
+  const url="./roof-measure-tool.html";
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:800,color:"#1a1a2e",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5}}>📐 ROOF MEASURE TOOL</div>
+          <div style={{fontSize:11,color:"#6b7280"}}>Satellite imagery · trace roof outline · pitch-corrected m²</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <a href={url} target="_blank" rel="noopener" style={{background:"#cc0000",color:"#fff",border:"none",padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>↗️ Open full screen</a>
+        </div>
+      </div>
+      <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:11,color:"#92400e",lineHeight:1.5}}>
+        💡 <strong>Quick guide:</strong> Search the property's address → switch to NZ Aerial (LINZ) for sharpest imagery → click "Draw new roof section" → trace each roof face by clicking corners → set pitch → copy measurement into your quote.
+      </div>
+      {error?
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:30,textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:10}}>📐</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#1a1a2e",marginBottom:6}}>Couldn't load tool inline</div>
+          <div style={{fontSize:12,color:"#6b7280",marginBottom:14}}>Use the full-screen button above to open the tool in a new tab.</div>
+          <a href={url} target="_blank" rel="noopener" style={{background:"#cc0000",color:"#fff",padding:"10px 20px",borderRadius:8,fontWeight:700,textDecoration:"none",display:"inline-block"}}>📐 Open Measure Tool</a>
+        </div>
+        :
+        <div style={{background:"#0f1115",border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",position:"relative"}}>
+          {!loaded&&<div style={{position:"absolute",top:0,left:0,right:0,bottom:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#1a1a2e",zIndex:1,color:"#fff"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:32,marginBottom:8}}>📐</div>
+              <div style={{fontSize:13,fontWeight:600}}>Loading satellite map…</div>
+              <div style={{fontSize:11,color:"#9ca3af",marginTop:4}}>(Esri/LINZ tiles · first load may take a few seconds)</div>
+            </div>
+          </div>}
+          <iframe
+            src={url}
+            title="Roof Measure Tool"
+            onLoad={()=>setLoaded(true)}
+            onError={()=>setError(true)}
+            allow="geolocation"
+            style={{width:"100%",height:"calc(100vh - 240px)",minHeight:620,border:"none",display:"block"}}
+          />
+        </div>
+      }
+    </div>
+  );
+}
+
 // ── EVENTS VIEW (meetings, training, leave, etc.) ─────────────
 function EventsView({events,setEvents}){
   const[showAdd,setShowAdd]=React.useState(false);
@@ -9537,6 +9590,7 @@ function App({user,onSignOut}){
       {id:"jobs",icon:"🔨",label:"Jobs"},
       {id:"schedule",icon:"👷",label:"Schedule"},
       {id:"events",icon:"📅",label:"Events"},
+      {id:"measure",icon:"📐",label:"Measure"},
       {id:"pricebook",icon:"📖",label:"Price Book"},
     ],
     safety:[
@@ -9670,6 +9724,7 @@ function App({user,onSignOut}){
         {tab==="schedule"&&<ScheduleView jobs={jobs} setJobs={setJobs} events={events} clients={clients} setClients={setClients} resetTick={tabResetTick}/>}
         {tab==="events"&&<EventsView events={events} setEvents={setEvents}/>}
         {tab==="pricebook"&&<PricebookView/>}
+        {tab==="measure"&&<MeasureView/>}
         {tab==="clients"&&<ClientsView clients={clients} setClients={setClients} jobs={jobs}/>}
         {tab==="toolbox"&&<ToolboxView jobs={jobs}/>}
         {tab==="sssp"&&<SSSPView jobs={jobs} setJobs={setJobs}/>}

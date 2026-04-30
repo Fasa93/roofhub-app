@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Roof Hub — Roof Measure & Estimate</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#0f1115;color:#1a1a2e;overflow:hidden;}
+.app{display:flex;flex-direction:column;height:100vh;}
+header{background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;border-bottom:3px solid #cc0000;flex-shrink:0;z-index:1000;}
+header img{height:42px;background:#fff;padding:3px 6px;border-radius:6px;}
+header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
+.search-row{display:flex;gap:8px;background:#fff;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-shrink:0;align-items:center;flex-wrap:wrap;}
+.search-row input{flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;font-family:inherit;outline:none;}
+.search-row input:focus{border-color:#cc0000;}
+.search-row button{padding:9px 14px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-primary{background:#cc0000;color:#fff;}
+.btn-secondary{background:#fff;color:#1a1a2e;border:1.5px solid #d1d5db !important;}
+.btn-success{background:#16a34a;color:#fff;}
+.btn-blue{background:#2563eb;color:#fff;}
+.main{flex:1;display:flex;min-height:0;}
+.map-wrap{flex:1;position:relative;}
+#map{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;}
+.sidebar{width:360px;background:#fff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;}
+.section{padding:14px 16px;border-bottom:1px solid #f3f4f6;}
+.section h3{font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.section h3 .toggle{cursor:pointer;color:#cc0000;font-size:11px;background:none;border:none;font-weight:700;}
+.tip{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:11px;color:#78350f;line-height:1.5;}
+.layer-toggle{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.layer-toggle button{flex:1;min-width:0;padding:6px 8px;border:1.5px solid #e5e7eb;background:#fff;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:#6b7280;}
+.layer-toggle button.active{border-color:#cc0000;background:#cc0000;color:#fff;}
+.measure-btn{display:block;width:100%;padding:11px;border:none;background:#cc0000;color:#fff;font-weight:700;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:8px;font-family:inherit;}
+.measure-btn:hover{background:#a30000;}
+.measure-btn.cancel{background:#6b7280;}
+.measure-btn.clear{background:#fff;color:#dc2626;border:1.5px solid #fca5a5;}
+.pitch-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+.pitch-grid button{padding:8px 4px;border:1.5px solid #e5e7eb;background:#fff;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;color:#6b7280;font-family:inherit;}
+.pitch-grid button.active{border-color:#cc0000;background:#fef2f2;color:#cc0000;}
+.pitch-custom{display:flex;gap:6px;align-items:center;font-size:12px;}
+.pitch-custom input{width:60px;padding:6px 8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;font-family:inherit;}
+.results{background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:10px;padding:14px;}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;}
+.result-row.total{border-top:2px solid #cc0000;padding-top:10px;margin-top:6px;}
+.result-label{font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+.result-val{font-size:18px;font-weight:800;color:#1a1a2e;font-family:'Helvetica Neue',sans-serif;}
+.result-val.big{font-size:26px;color:#cc0000;}
+.shapes-list{max-height:200px;overflow-y:auto;}
+.shape-item{padding:8px 10px;background:#f9fafb;border-radius:6px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.shape-item input.label{flex:1;border:none;background:transparent;font-weight:700;color:#1a1a2e;font-size:12px;font-family:inherit;outline:none;padding:2px 4px;border-radius:4px;}
+.shape-item input.label:focus{background:#fff;border:1px solid #cc0000;}
+.shape-item .area{font-size:11px;color:#6b7280;font-weight:600;white-space:nowrap;}
+.shape-item button{background:transparent;border:none;color:#dc2626;font-size:14px;cursor:pointer;padding:0 4px;}
+.coords{font-size:10px;color:#6b7280;font-family:monospace;background:#f9fafb;padding:6px 8px;border-radius:4px;margin-top:8px;word-break:break-all;line-height:1.4;}
+.actions{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.actions button{padding:10px;border:none;border-radius:7px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
+
+/* ─── Estimator dark panel ─── */
+.estimator-section{background:linear-gradient(135deg,#1a1a2e,#0f1115);color:#fff;}
+.estimator-section h3{color:rgba(255,255,255,0.6);}
+.est-area-input{display:flex;gap:6px;margin-bottom:12px;align-items:center;}
+.est-area-input input{flex:1;padding:10px 12px;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.1);color:#fff;border-radius:7px;font-size:14px;font-weight:700;text-align:right;font-family:inherit;outline:none;}
+.est-area-input input:focus{border-color:#cc0000;background:rgba(255,255,255,0.15);}
+.est-area-input span{color:rgba(255,255,255,0.6);font-size:12px;}
+.est-area-input button{padding:9px 12px;background:#cc0000;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
+.type-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;}
+.type-btn{padding:10px 6px;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.15);border-radius:8px;color:rgba(255,255,255,0.7);font-weight:700;cursor:pointer;font-size:11px;text-align:center;font-family:inherit;line-height:1.3;}
+.type-btn.active{background:#cc0000;border-color:#cc0000;color:#fff;}
+.type-btn .small{display:block;font-size:9px;font-weight:600;opacity:0.8;margin-top:2px;}
+.est-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:12px;margin-bottom:10px;}
+.est-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:12px;color:rgba(255,255,255,0.85);border-bottom:1px solid rgba(255,255,255,0.08);}
+.est-row:last-child{border-bottom:none;}
+.est-row.subtotal{font-weight:700;color:#fff;border-bottom:none;border-top:1px solid rgba(255,255,255,0.2);padding-top:8px;margin-top:4px;}
+.est-row.total{font-weight:800;color:#fbbf24;border-bottom:none;border-top:2px solid #cc0000;padding-top:10px;margin-top:6px;font-size:14px;}
+.est-row .lbl{flex:1;}
+.est-row .val{font-weight:700;font-family:'Helvetica Neue',sans-serif;}
+.est-row.editable input{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;width:80px;padding:3px 6px;border-radius:4px;font-size:11px;text-align:right;font-family:inherit;}
+.est-row.editable input:focus{border-color:#cc0000;outline:none;}
+
+.big-total{background:linear-gradient(135deg,#cc0000,#7f1d1d);border-radius:12px;padding:14px;margin-bottom:10px;}
+.big-total .label{color:rgba(255,255,255,0.85);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;}
+.big-total .price{color:#fff;font-size:28px;font-weight:800;font-family:'Helvetica Neue',sans-serif;letter-spacing:-0.5px;}
+.big-total .per-m{color:rgba(255,255,255,0.7);font-size:11px;}
+.editor-toggle{background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);padding:7px;border-radius:6px;font-size:11px;cursor:pointer;width:100%;font-family:inherit;text-align:center;margin-bottom:8px;}
+.editor-toggle:hover{background:rgba(255,255,255,0.1);}
+.gst-toggle{display:flex;gap:8px;margin-bottom:10px;}
+.gst-toggle button{flex:1;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);padding:7px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
+.gst-toggle button.active{background:rgba(204,0,0,0.2);border-color:#cc0000;color:#fff;}
+
+/* Extras toggles */
+.extras-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:12px;margin-bottom:10px;}
+.extras-card .extras-title{font-size:11px;font-weight:800;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.extra-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.07);font-size:12px;}
+.extra-row:last-child{border-bottom:none;}
+.extra-row label{display:flex;align-items:center;gap:7px;flex:1;cursor:pointer;color:rgba(255,255,255,0.85);}
+.extra-row label input[type="checkbox"]{accent-color:#cc0000;width:14px;height:14px;cursor:pointer;}
+.extra-row .qty-input{width:54px;padding:4px 6px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:4px;font-size:11px;text-align:right;font-family:inherit;}
+.extra-row .qty-input:focus{border-color:#cc0000;outline:none;}
+.extra-row .extra-cost{font-weight:700;color:#fff;font-family:'Helvetica Neue';font-size:12px;min-width:64px;text-align:right;}
+.extra-detail{font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px;letter-spacing:0.3px;}
+.scaffold-options{display:flex;gap:6px;margin-top:8px;margin-bottom:4px;}
+.scaffold-options button{flex:1;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);padding:7px 4px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;line-height:1.2;}
+.scaffold-options button.active{background:rgba(204,0,0,0.25);border-color:#cc0000;color:#fff;}
+.warn-banner{background:rgba(252,191,36,0.15);border:1px solid rgba(252,191,36,0.4);color:#fde68a;padding:7px 10px;border-radius:6px;font-size:11px;margin:8px 0;line-height:1.4;}
+
+@media (max-width:780px){
+  .sidebar{width:100%;border-left:none;border-top:1px solid #e5e7eb;max-height:60%;}
+  .main{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAC+gL6AAD/4QD6RXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAMAAAExAAIAAAAhAAAAcgEyAAIAAAAUAAAAlIdpAAQAAAABAAAAqAAAAAAAAAL6AAAAAQAAAvoAAAABQWRvYmUgUGhvdG9zaG9wIDIyLjUgKE1hY2ludG9zaCkAADIwMjI6MTI6MTAgMjE6MDU6MzQAAASQBAACAAAAFAAAAN6gAQADAAAAAQABAACgAgAEAAAAAQAAAUCgAwAEAAAAAQAAAOIAAAAAMjAyMjowNjowMiAyMjoxNjozMgD/7QBkUGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAACwcAVoAAxslRxwCAAACAAIcAj4ACDIwMjIwNjAyHAI/AAsyMjE2MzIrMTIwMDhCSU0EJQAAAAAAEIFee8qWhgdrEycgzJ0maez/wAARCADiAUADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9sAQwACAgICAgIDAgIDBQMDAwUGBQUFBQYIBgYGBgYICggICAgICAoKCgoKCgoKDAwMDAwMDg4ODg4PDw8PDw8PDw8P/9sAQwECAgIEBAQHBAQHEAsJCxAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ/90ABAAU/9oADAMBAAIRAxEAPwD9/KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9D9/KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9H9/KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9L9/KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9P9/KKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKK5Dxz8QPBPwy8OXXi74ga3a6Bo9mpaW5u5REg9hnlmPZVBJ7A0AdfXFeNPiR4A+HNrbXnj3xDY6BDeyrDAb24SDzZGIAVAxBY884zjqeK/ET9pn/gsnZQR3fhb9mHSTcTHdGdf1SLbGvbdbWjcsfRpsD1jNfnn8IvhD+2F+2V8Q0+K93Z6p4uisnaWbVdSlENthAT5Ns0pSMknhY4RtHcKOawxNSUKcpwV2k7I9XI8HRxGNoYfET5ISnFSlp7qbSbu9NFrrof17W9xBdwR3VrIs0Myh0dCGVlYZBBHBBHQipq/n/+CH7U/wAVv2bdbPgvxRb3F/oNnKYrnSLzKT2pz83kM/MZHXacofQE7q/a74UfGTwB8Z/DyeIfAupLdIABPbvhLm2c/wAEsecqfQ8qeoJFeFkXE+Hxy5V7s1vF7/Lufqvir4G5vwvP21Re1wsvhqx+Fp7c2/K36tP7LZ6lRRRX0h+KhRRRQAUUUUAFFFFABRRRQB//1P38ooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACsLxL4n8Oe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z+mPDX6Q1bBYb+xOJqX1vAy0tLWcF/db3S6JtNacso2PPvgR+058N/j1p4XQLj+z9chXdcaXcsBOmOrRnpIn+0vT+ICvouvwH+Of7JnxS/Z11QeNvCV1PqegWcglg1Sz3R3NmQfl89U5Qj++vynvtzivqD9nL/goHb3QtfB3x1YQT/LHFraKBG3YfakUfKfWRRj+8Bya58r4tlCp9VzOPJPv0f8Al67eh63Hf0e6OKwbz/get9awr1cFrUh3Vt5W/laU1ppLc/Viiq1neWmoWsV9YTpc206h45Y2Do6sMhlYZBBHQirNfdpn8pSi07Pc/9f9/KKKKACiiigDwn4q/sx/AD43Xsep/FTwLpniC/iQRrdTRbLnYOimeIpIVHYFsDtXjI/4Jw/sTDp8LLH/AMCr0/8AtevtyigLnxOP+Cc37FI6fCvT/wDwIvD/AO16eP8AgnT+xUOf+FV6d/3+u/8A49X2rRQFz4wX/gnj+xcvT4VaZ+L3J/nLUg/4J7fsYD/mlOlfnP8A/Ha+y6KAufHK/wDBPv8AYyXp8KNI/ETH+clSj9gH9jUdPhPo3/fEn/xdfYNFA7nyEv7A37HC9PhNon4xOf5tUw/YN/Y6HT4S6F/4Dk/+zV9b0UCufJY/YQ/Y8HT4S6D/AOA3/wBevRvhx+zZ8BPhDqk2t/DTwFpHh7UZ12Nc2tqizbf7okOWUHuARnvXt1FABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAyWKOaNoZkEkbgqysMgg8EEHqDXh837Mv7P1xM9xL4A0gvIxZiLZRkk5PA4r3OisK2Fp1Le0in6q56mW55jcFzfU686d9+WTjf1s1c5rwp4P8M+B9JXQfCOnRaVpyMWW3hBWNS3XaucDPtXS0UVrCCilGKsjhxGJqVqkqtWTlJ6tt3bfdt7n//Q/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//R/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//S/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//T/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//U/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//V/fyiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z" alt="The Roof Hub"/>
+    <h1>📐 Roof Measure & Estimate</h1>
+    <div style="font-size:11px;color:rgba(255,255,255,0.7);">Trace → m² → quick price</div>
+  </header>
+
+  <div class="search-row">
+    <input id="search" type="text" placeholder="🔍 Enter NZ address (e.g. 98 Hillsborough Road, Auckland)" autocomplete="off"/>
+    <button class="btn-primary" onclick="searchAddress()">Find</button>
+    <button class="btn-secondary" onclick="useMyLocation()">📍 My location</button>
+  </div>
+
+  <div class="main">
+    <div class="map-wrap">
+      <div id="map"></div>
+    </div>
+
+    <div class="sidebar">
+      <div class="section">
+        <h3>1 · Imagery layer</h3>
+        <div class="layer-toggle">
+          <button id="lyr-esri" class="active" onclick="setLayer('esri')">Satellite</button>
+          <button id="lyr-linz" onclick="setLayer('linz')">NZ Aerial</button>
+          <button id="lyr-osm" onclick="setLayer('osm')">Street</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>2 · Trace each roof section</h3>
+        <button id="drawBtn" class="measure-btn" onclick="startDraw()">✏️ Draw new roof section</button>
+        <button id="cancelBtn" class="measure-btn cancel" style="display:none;" onclick="cancelDraw()">✕ Cancel</button>
+        <button class="measure-btn clear" onclick="clearAll()">🗑️ Clear all sections</button>
+      </div>
+
+      <div class="section">
+        <h3>3 · Roof pitch</h3>
+        <div class="pitch-grid">
+          <button data-pitch="0" onclick="setPitch(0)">Flat 0°</button>
+          <button data-pitch="15" onclick="setPitch(15)">15°</button>
+          <button data-pitch="22.5" onclick="setPitch(22.5)" class="active">22.5°</button>
+          <button data-pitch="30" onclick="setPitch(30)">30°</button>
+          <button data-pitch="35" onclick="setPitch(35)">35°</button>
+          <button data-pitch="40" onclick="setPitch(40)">40°</button>
+          <button data-pitch="45" onclick="setPitch(45)">45°</button>
+          <button data-pitch="50" onclick="setPitch(50)">50°</button>
+        </div>
+        <div class="pitch-custom">
+          Custom: <input id="customPitch" type="number" min="0" max="80" step="0.5" value="22.5" onchange="setPitch(parseFloat(this.value))"/>°
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>4 · Sections</h3>
+        <div id="shapesList" class="shapes-list"></div>
+      </div>
+
+      <div class="section">
+        <h3>5 · Total area</h3>
+        <div class="results">
+          <div class="result-row">
+            <span class="result-label">Footprint (flat plan)</span>
+            <span class="result-val" id="totalFootprint">0 m²</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Perimeter (auto)</span>
+            <span class="result-val" id="totalPerimeter">0 lm</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Pitch multiplier</span>
+            <span class="result-val" id="pitchMultiplier">×1.082</span>
+          </div>
+          <div class="result-row total">
+            <span class="result-label">Total roof area</span>
+            <span class="result-val big" id="totalRoof">0 m²</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ESTIMATOR ═══ -->
+      <div class="section estimator-section">
+        <h3>💰 Quick estimate <button class="toggle" onclick="toggleEditor()">✏️ Edit rates</button></h3>
+
+        <div class="est-area-input">
+          <input id="estArea" type="number" min="0" step="0.1" value="0" placeholder="m²"/>
+          <span>m²</span>
+          <button onclick="useMeasured()">↻ Auto</button>
+        </div>
+
+        <div class="type-grid">
+          <button class="type-btn active" data-type="gable" onclick="setRoofType('gable')">Simple Gable<span class="small">re-roof</span></button>
+          <button class="type-btn" data-type="hipvalley" onclick="setRoofType('hipvalley')">Hip & Valley<span class="small">re-roof</span></button>
+          <button class="type-btn" data-type="tilemetal" onclick="setRoofType('tilemetal')">Tile→Metal<span class="small">conversion</span></button>
+        </div>
+
+        <div class="big-total">
+          <div class="label">Quote price <span id="gstLabel">incl GST</span></div>
+          <div class="price" id="estTotal">$0</div>
+          <div class="per-m" id="estPerM">$0/m² × 0 m²</div>
+        </div>
+
+        <div class="gst-toggle">
+          <button id="gstInc" class="active" onclick="setGST(true)">Incl GST</button>
+          <button id="gstExc" onclick="setGST(false)">Excl GST</button>
+        </div>
+
+        <!-- ═══ Site & Access Extras ═══ -->
+        <div class="extras-card">
+          <div class="extras-title">🦺 Site & access extras</div>
+
+          <!-- Strip existing roof -->
+          <div class="extra-row" id="row-strip">
+            <label>
+              <input type="checkbox" id="ex-strip-toggle"/>
+              <span>
+                Strip & remove existing roof
+                <div class="extra-detail">m² × $/m² · for re-roof replacements</div>
+              </span>
+            </label>
+            <input type="number" min="0" step="1" class="qty-input" id="ex-strip-qty" placeholder="m²" style="margin-right:6px;"/>
+            <span class="extra-cost" id="ex-strip-cost">$0</span>
+          </div>
+
+          <!-- Edge protection / scaffold -->
+          <div class="extra-row" style="display:block;">
+            <label style="margin-bottom:4px;">
+              <input type="checkbox" id="ex-scaffold-toggle" checked/>
+              <span style="font-weight:700;">Edge protection / scaffold</span>
+            </label>
+            <div class="scaffold-options">
+              <button id="sc-edge" class="active" onclick="setScaffoldMode('edge')">Edge protection<br/>$<span id="rate-edge">35</span>/lm · pitch ≤30°</button>
+              <button id="sc-platform" onclick="setScaffoldMode('platform')">Platform scaffold<br/>$<span id="rate-platform">120</span>/lm · pitch &gt;30°</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;">
+              <span>Linear metres:</span>
+              <input type="number" min="0" step="0.5" class="qty-input" id="ex-scaffold-qty" placeholder="lm" style="width:80px;"/>
+              <span class="extra-cost" id="ex-scaffold-cost">$0</span>
+            </div>
+            <div class="warn-banner" id="pitchWarn" style="display:none;">
+              ⚠️ Pitch is greater than 30° — platform scaffold recommended (auto-selected).
+            </div>
+          </div>
+
+          <!-- Damaged timber allowance -->
+          <div class="extra-row">
+            <label>
+              <input type="checkbox" id="ex-timber-toggle" checked/>
+              <span>
+                Damaged timber allowance
+                <div class="extra-detail">lm × $/lm · framing repairs</div>
+              </span>
+            </label>
+            <input type="number" min="0" step="1" class="qty-input" id="ex-timber-qty" value="12" style="margin-right:6px;"/>
+            <span class="extra-cost" id="ex-timber-cost">$600</span>
+          </div>
+        </div>
+
+        <!-- Live breakdown -->
+        <div class="est-card">
+          <div class="est-row"><span class="lbl">Materials</span><span class="val" id="brkMaterials">$0</span></div>
+          <div class="est-row"><span class="lbl">Labour</span><span class="val" id="brkLabour">$0</span></div>
+          <div class="est-row" id="rowConversion" style="display:none;"><span class="lbl">Strip + purlins + hardfill (tile→metal)</span><span class="val" id="brkConversion">$0</span></div>
+          <div class="est-row" id="rowExStrip" style="display:none;"><span class="lbl">Strip existing roof</span><span class="val" id="brkExStrip">$0</span></div>
+          <div class="est-row" id="rowExScaffold" style="display:none;"><span class="lbl" id="lblExScaffold">Edge protection</span><span class="val" id="brkExScaffold">$0</span></div>
+          <div class="est-row" id="rowExTimber" style="display:none;"><span class="lbl">Damaged timber allowance</span><span class="val" id="brkExTimber">$0</span></div>
+          <div class="est-row subtotal"><span class="lbl">Subtotal</span><span class="val" id="brkSubtotal">$0</span></div>
+          <div class="est-row"><span class="lbl">Margin (<span id="marginPct">25</span>%)</span><span class="val" id="brkMargin">$0</span></div>
+          <div class="est-row" id="rowGST"><span class="lbl">GST (15%)</span><span class="val" id="brkGST">$0</span></div>
+          <div class="est-row total"><span class="lbl">TOTAL</span><span class="val" id="brkTotal">$0</span></div>
+        </div>
+
+        <!-- Rate editor -->
+        <div id="editor" style="display:none;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-bottom:8px;">Edit rates per m². Saves automatically.</div>
+
+          <div class="est-card" data-edit-type="gable" style="display:none;">
+            <div style="font-weight:700;color:#fff;margin-bottom:6px;font-size:12px;">Simple Gable rates ($/m²)</div>
+            <div class="est-row editable"><span class="lbl">Sheets + underlay + fixings</span><input type="number" step="0.5" data-rate="gable.materials"/></div>
+            <div class="est-row editable"><span class="lbl">Flashings (basic)</span><input type="number" step="0.5" data-rate="gable.flashings"/></div>
+            <div class="est-row editable"><span class="lbl">Labour</span><input type="number" step="0.5" data-rate="gable.labour"/></div>
+          </div>
+
+          <div class="est-card" data-edit-type="hipvalley" style="display:none;">
+            <div style="font-weight:700;color:#fff;margin-bottom:6px;font-size:12px;">Hip & Valley rates ($/m²)</div>
+            <div class="est-row editable"><span class="lbl">Sheets + underlay + fixings</span><input type="number" step="0.5" data-rate="hipvalley.materials"/></div>
+            <div class="est-row editable"><span class="lbl">Flashings (incl. valleys)</span><input type="number" step="0.5" data-rate="hipvalley.flashings"/></div>
+            <div class="est-row editable"><span class="lbl">Labour (more cuts)</span><input type="number" step="0.5" data-rate="hipvalley.labour"/></div>
+          </div>
+
+          <div class="est-card" data-edit-type="tilemetal" style="display:none;">
+            <div style="font-weight:700;color:#fff;margin-bottom:6px;font-size:12px;">Tile-to-Metal ($/m²)</div>
+            <div class="est-row editable"><span class="lbl">Sheets + underlay + fixings</span><input type="number" step="0.5" data-rate="tilemetal.materials"/></div>
+            <div class="est-row editable"><span class="lbl">Flashings</span><input type="number" step="0.5" data-rate="tilemetal.flashings"/></div>
+            <div class="est-row editable"><span class="lbl">Labour (install)</span><input type="number" step="0.5" data-rate="tilemetal.labour"/></div>
+            <div class="est-row editable"><span class="lbl">Strip tiles</span><input type="number" step="0.5" data-rate="tilemetal.strip"/></div>
+            <div class="est-row editable"><span class="lbl">Purlins (timber + install)</span><input type="number" step="0.5" data-rate="tilemetal.purlins"/></div>
+            <div class="est-row editable"><span class="lbl">Hardfill skip bin</span><input type="number" step="0.5" data-rate="tilemetal.hardfill"/></div>
+          </div>
+
+          <div class="est-card">
+            <div style="font-weight:700;color:#fff;margin-bottom:6px;font-size:12px;">Site & access extras</div>
+            <div class="est-row editable"><span class="lbl">Strip existing roof ($/m²)</span><input type="number" step="0.5" data-rate="extras.stripExisting"/></div>
+            <div class="est-row editable"><span class="lbl">Edge protection ($/lm)</span><input type="number" step="1" data-rate="extras.edgeProtection"/></div>
+            <div class="est-row editable"><span class="lbl">Platform scaffold ($/lm)</span><input type="number" step="1" data-rate="extras.platformScaffold"/></div>
+            <div class="est-row editable"><span class="lbl">Damaged timber ($/lm)</span><input type="number" step="1" data-rate="extras.timberPerLm"/></div>
+            <div class="est-row editable"><span class="lbl">Default timber allowance (lm)</span><input type="number" step="1" data-rate="extras.timberAllowanceLm"/></div>
+          </div>
+
+          <div class="est-card">
+            <div style="font-weight:700;color:#fff;margin-bottom:6px;font-size:12px;">Margin & GST</div>
+            <div class="est-row editable"><span class="lbl">Margin %</span><input type="number" step="1" min="0" max="100" data-rate="margin"/></div>
+            <div class="est-row" style="font-size:10px;color:rgba(255,255,255,0.5);"><span class="lbl">GST is fixed at 15% (NZ)</span></div>
+          </div>
+
+          <button class="editor-toggle" onclick="resetRates()" style="background:rgba(220,38,38,0.2);border-color:rgba(220,38,38,0.5);color:#fca5a5;">↺ Reset to defaults</button>
+        </div>
+
+        <div class="actions">
+          <button class="btn-success" onclick="copyEstimate()">📋 Copy estimate</button>
+          <button class="btn-blue" onclick="copyMeasurement()">📋 Copy measurement summary</button>
+          <button class="btn-secondary" onclick="window.print()">🖨️ Print / Save PDF</button>
+        </div>
+        <div id="copyStatus" style="font-size:11px;color:#fbbf24;margin-top:8px;text-align:center;min-height:14px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ MAP ═════════════════════════════════════════════════════════════
+const TILES = {
+  esri: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Imagery © Esri', maxZoom: 20 },
+  linz: { url: 'https://basemaps.linz.govt.nz/v1/tiles/aerial/EPSG:3857/{z}/{x}/{y}.webp?api=c01h64m37jmqhb44hg6ce2y5wmm', attr: 'Imagery © LINZ CC BY 4.0', maxZoom: 22 },
+  osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap', maxZoom: 19 }
+};
+const map = L.map('map', { center:[-36.9106,174.7372], zoom:19, preferCanvas:true });
+let currentLayer = null;
+function setLayer(key){
+  if(currentLayer) map.removeLayer(currentLayer);
+  const t = TILES[key];
+  currentLayer = L.tileLayer(t.url, { attribution:t.attr, maxZoom:t.maxZoom, maxNativeZoom:t.maxZoom }).addTo(map);
+  document.querySelectorAll('.layer-toggle button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('lyr-'+key).classList.add('active');
+}
+setLayer('esri');
+
+// ═══ DRAWING ═════════════════════════════════════════════════════════
+const drawnLayers = L.featureGroup().addTo(map);
+const shapes = [];
+let nextShapeId = 1;
+let currentPitch = 22.5;
+let drawing = null;
+
+function startDraw(){
+  document.getElementById('drawBtn').style.display = 'none';
+  document.getElementById('cancelBtn').style.display = 'block';
+  drawing = new L.Draw.Polygon(map, {
+    showArea: true,
+    shapeOptions: { color:'#cc0000', weight:3, opacity:0.95, fillColor:'#cc0000', fillOpacity:0.2 },
+    metric: true,
+    repeatMode: false
+  });
+  drawing.enable();
+}
+function cancelDraw(){
+  if(drawing){ drawing.disable(); drawing = null; }
+  document.getElementById('drawBtn').style.display = 'block';
+  document.getElementById('cancelBtn').style.display = 'none';
+}
+map.on(L.Draw.Event.CREATED, function(e){
+  const layer = e.layer;
+  drawnLayers.addLayer(layer);
+  const latlngs = layer.getLatLngs()[0];
+  const m2 = ringAreaSquareMeters(latlngs);
+  const peri = ringPerimeterMeters(latlngs);
+  const id = nextShapeId++;
+  shapes.push({ id, layer, label:'Section '+id, footprintM2:m2, perimeterM:peri, pitch:currentPitch });
+  cancelDraw();
+  refreshList(); refreshTotals();
+});
+
+function ringAreaSquareMeters(latlngs){
+  if(!latlngs || latlngs.length<3) return 0;
+  const R = 6378137;
+  let lat0 = 0; for(const p of latlngs) lat0 += p.lat;
+  lat0 /= latlngs.length;
+  const cosLat = Math.cos(lat0*Math.PI/180);
+  const pts = latlngs.map(p => ({ x:(p.lng*Math.PI/180)*R*cosLat, y:(p.lat*Math.PI/180)*R }));
+  let area = 0;
+  for(let i=0;i<pts.length;i++){
+    const j = (i+1)%pts.length;
+    area += pts[i].x*pts[j].y - pts[j].x*pts[i].y;
+  }
+  return Math.abs(area)/2;
+}
+function ringPerimeterMeters(latlngs){
+  if(!latlngs || latlngs.length<2) return 0;
+  let total = 0;
+  for(let i=0;i<latlngs.length;i++){
+    const j = (i+1)%latlngs.length;
+    total += map.distance(latlngs[i], latlngs[j]);
+  }
+  return total;
+}
+
+function setPitch(deg){
+  currentPitch = Math.max(0, Math.min(80, deg));
+  document.getElementById('customPitch').value = currentPitch;
+  document.querySelectorAll('.pitch-grid button').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.pitch)===currentPitch));
+  shapes.forEach(s => s.pitch = currentPitch);
+  // Auto-pick scaffold mode
+  if(currentPitch > 30 && scaffoldMode === 'edge'){
+    setScaffoldMode('platform', true); // auto
+    document.getElementById('pitchWarn').style.display = 'block';
+  } else if(currentPitch <= 30){
+    document.getElementById('pitchWarn').style.display = 'none';
+  }
+  refreshList(); refreshTotals();
+}
+function pitchMultiplier(d){ return 1/Math.cos(d*Math.PI/180); }
+
+function refreshList(){
+  const list = document.getElementById('shapesList');
+  if(shapes.length===0){
+    list.innerHTML = '<div style="color:#9ca3af;font-size:11px;font-style:italic;text-align:center;padding:14px;">No sections drawn yet</div>';
+    return;
+  }
+  list.innerHTML = shapes.map(s => {
+    const roofM2 = s.footprintM2 * pitchMultiplier(s.pitch);
+    return `<div class="shape-item">
+      <input class="label" value="${s.label.replace(/"/g,'&quot;')}" data-id="${s.id}" oninput="renameShape(${s.id},this.value)"/>
+      <span class="area">${s.footprintM2.toFixed(1)} → ${roofM2.toFixed(1)} m²</span>
+      <button onclick="removeShape(${s.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function refreshTotals(){
+  const totalFp = shapes.reduce((s,x)=>s+x.footprintM2,0);
+  const totalRoof = shapes.reduce((s,x)=>s+x.footprintM2*pitchMultiplier(x.pitch),0);
+  const totalPeri = shapes.reduce((s,x)=>s+x.perimeterM,0);
+  document.getElementById('totalFootprint').textContent = totalFp.toFixed(1)+' m²';
+  document.getElementById('totalRoof').textContent = totalRoof.toFixed(1)+' m²';
+  document.getElementById('totalPerimeter').textContent = totalPeri.toFixed(1)+' lm';
+  document.getElementById('pitchMultiplier').textContent = '×'+pitchMultiplier(currentPitch).toFixed(3);
+  // Auto-update estimate area & scaffold lm if user hasn't manually overridden
+  if(!estAreaManualOverride){
+    document.getElementById('estArea').value = totalRoof.toFixed(1);
+  }
+  if(!scaffoldQtyManualOverride){
+    document.getElementById('ex-scaffold-qty').value = totalPeri.toFixed(1);
+  }
+  if(!stripQtyManualOverride){
+    document.getElementById('ex-strip-qty').value = totalRoof.toFixed(1);
+  }
+  refreshEstimate();
+}
+
+function removeShape(id){
+  const i = shapes.findIndex(s => s.id === id);
+  if(i<0) return;
+  drawnLayers.removeLayer(shapes[i].layer);
+  shapes.splice(i,1);
+  refreshList(); refreshTotals();
+}
+function renameShape(id, label){
+  const s = shapes.find(x=>x.id===id);
+  if(s) s.label = label;
+}
+function clearAll(){
+  if(shapes.length===0) return;
+  if(!confirm('Clear all '+shapes.length+' section(s)?')) return;
+  shapes.forEach(s => drawnLayers.removeLayer(s.layer));
+  shapes.length = 0;
+  refreshList(); refreshTotals();
+}
+
+// ═══ ADDRESS ═════════════════════════════════════════════════════════
+async function searchAddress(){
+  const q = document.getElementById('search').value.trim();
+  if(!q) return;
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q+', New Zealand')+'&format=json&limit=1');
+    const data = await r.json();
+    if(!data.length){ alert('Address not found.'); return; }
+    map.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 20);
+  } catch(e){ alert('Search failed: '+e.message); }
+}
+document.getElementById('search').addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();searchAddress();} });
+function useMyLocation(){
+  if(!navigator.geolocation){ alert('Geolocation not available'); return; }
+  navigator.geolocation.getCurrentPosition(
+    p => map.setView([p.coords.latitude, p.coords.longitude], 20),
+    e => alert('Could not get location: '+e.message),
+    { enableHighAccuracy:true, timeout:8000 }
+  );
+}
+
+// ═══ ESTIMATOR ═══════════════════════════════════════════════════════
+const RATE_DEFAULTS = {
+  gable:     { materials: 38, flashings: 10, labour: 52 },
+  hipvalley: { materials: 38, flashings: 20, labour: 77 },
+  tilemetal: { materials: 38, flashings: 12, labour: 52, strip: 20, purlins: 28, hardfill: 5 },
+  extras: {
+    stripExisting:    15,   // $/m² to strip existing metal/old roof (re-roofs)
+    edgeProtection:   35,   // $/lm
+    platformScaffold: 120,  // $/lm (pitch >30°)
+    timberPerLm:      50,   // $/lm framing repair
+    timberAllowanceLm:12    // default 12 lm
+  },
+  margin: 25
+};
+const TYPE_LABELS = {
+  gable: 'Simple Gable Re-roof',
+  hipvalley: 'Hip & Valley Re-roof',
+  tilemetal: 'Tile-to-Metal Conversion'
+};
+
+function loadRates(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('roofhub_estimate_rates_v2') || 'null');
+    if(saved){
+      // Merge with defaults to ensure new keys exist
+      saved.extras = Object.assign({}, RATE_DEFAULTS.extras, saved.extras || {});
+      return saved;
+    }
+  } catch(e){}
+  return JSON.parse(JSON.stringify(RATE_DEFAULTS));
+}
+function saveRates(r){ localStorage.setItem('roofhub_estimate_rates_v2', JSON.stringify(r)); }
+let rates = loadRates();
+
+let currentType = 'gable';
+let gstIncluded = true;
+let scaffoldMode = 'edge'; // 'edge' or 'platform'
+let scaffoldUserChose = false; // true = user clicked, false = auto
+let estAreaManualOverride = false;
+let scaffoldQtyManualOverride = false;
+let stripQtyManualOverride = false;
+
+function setRoofType(t){
+  currentType = t;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === t));
+  document.querySelectorAll('[data-edit-type]').forEach(d => d.style.display = (d.dataset.editType === t ? 'block' : 'none'));
+  // For tile→metal, the conversion costs (strip+purlins+hardfill) are ALREADY in the type rates,
+  // so disable the separate "strip existing" toggle.
+  document.getElementById('ex-strip-toggle').disabled = (t === 'tilemetal');
+  if(t === 'tilemetal') document.getElementById('ex-strip-toggle').checked = false;
+  refreshEstimate();
+}
+function setGST(inc){
+  gstIncluded = inc;
+  document.getElementById('gstInc').classList.toggle('active', inc);
+  document.getElementById('gstExc').classList.toggle('active', !inc);
+  document.getElementById('gstLabel').textContent = inc ? 'incl GST' : 'excl GST';
+  document.getElementById('rowGST').style.display = inc ? 'flex' : 'none';
+  refreshEstimate();
+}
+function setScaffoldMode(mode, isAuto){
+  scaffoldMode = mode;
+  if(!isAuto) scaffoldUserChose = true;
+  document.getElementById('sc-edge').classList.toggle('active', mode === 'edge');
+  document.getElementById('sc-platform').classList.toggle('active', mode === 'platform');
+  refreshEstimate();
+}
+function fmtMoney(n){ return '$'+Math.round(n).toLocaleString('en-NZ'); }
+
+function calcEstimate(){
+  const area = parseFloat(document.getElementById('estArea').value) || 0;
+  const r = rates[currentType];
+  let materials = (r.materials + r.flashings) * area;
+  let labour = r.labour * area;
+  let conversion = 0; // tile→metal extras
+  if(currentType === 'tilemetal'){
+    conversion = (r.strip + r.purlins + r.hardfill) * area;
+  }
+
+  // Extras
+  const stripOn = !document.getElementById('ex-strip-toggle').disabled && document.getElementById('ex-strip-toggle').checked;
+  const stripQty = parseFloat(document.getElementById('ex-strip-qty').value) || 0;
+  const stripCost = stripOn ? stripQty * rates.extras.stripExisting : 0;
+
+  const scaffoldOn = document.getElementById('ex-scaffold-toggle').checked;
+  const scaffoldQty = parseFloat(document.getElementById('ex-scaffold-qty').value) || 0;
+  const scaffoldRate = scaffoldMode === 'platform' ? rates.extras.platformScaffold : rates.extras.edgeProtection;
+  const scaffoldCost = scaffoldOn ? scaffoldQty * scaffoldRate : 0;
+
+  const timberOn = document.getElementById('ex-timber-toggle').checked;
+  const timberQty = parseFloat(document.getElementById('ex-timber-qty').value) || 0;
+  const timberCost = timberOn ? timberQty * rates.extras.timberPerLm : 0;
+
+  const subtotal = materials + labour + conversion + stripCost + scaffoldCost + timberCost;
+  const margin = subtotal * (rates.margin / 100);
+  const exclGST = subtotal + margin;
+  const gst = exclGST * 0.15;
+  const total = gstIncluded ? exclGST + gst : exclGST;
+  return { area, materials, labour, conversion, stripCost, scaffoldCost, timberCost,
+           stripQty, scaffoldQty, scaffoldRate, timberQty,
+           subtotal, margin, gst, exclGST, total,
+           perM: area > 0 ? total / area : 0 };
+}
+
+function refreshEstimate(){
+  const e = calcEstimate();
+  document.getElementById('estTotal').textContent = fmtMoney(e.total);
+  document.getElementById('estPerM').textContent = '$' + e.perM.toFixed(0) + '/m² × ' + e.area.toFixed(1) + ' m²';
+  document.getElementById('brkMaterials').textContent = fmtMoney(e.materials);
+  document.getElementById('brkLabour').textContent = fmtMoney(e.labour);
+  document.getElementById('rowConversion').style.display = (currentType === 'tilemetal' ? 'flex' : 'none');
+  document.getElementById('brkConversion').textContent = fmtMoney(e.conversion);
+  document.getElementById('rowExStrip').style.display = (e.stripCost > 0 ? 'flex' : 'none');
+  document.getElementById('brkExStrip').textContent = fmtMoney(e.stripCost);
+  document.getElementById('rowExScaffold').style.display = (e.scaffoldCost > 0 ? 'flex' : 'none');
+  document.getElementById('lblExScaffold').textContent = (scaffoldMode === 'platform' ? 'Platform scaffold' : 'Edge protection') + ' (' + e.scaffoldQty.toFixed(1) + ' lm × $' + e.scaffoldRate + ')';
+  document.getElementById('brkExScaffold').textContent = fmtMoney(e.scaffoldCost);
+  document.getElementById('rowExTimber').style.display = (e.timberCost > 0 ? 'flex' : 'none');
+  document.getElementById('brkExTimber').textContent = fmtMoney(e.timberCost);
+  document.getElementById('brkSubtotal').textContent = fmtMoney(e.subtotal);
+  document.getElementById('brkMargin').textContent = fmtMoney(e.margin);
+  document.getElementById('marginPct').textContent = rates.margin;
+  document.getElementById('brkGST').textContent = fmtMoney(e.gst);
+  document.getElementById('brkTotal').textContent = fmtMoney(e.total);
+  // Update the per-extra cost displays in the toggle rows
+  document.getElementById('ex-strip-cost').textContent = fmtMoney(e.stripCost);
+  document.getElementById('ex-scaffold-cost').textContent = fmtMoney(e.scaffoldCost);
+  document.getElementById('ex-timber-cost').textContent = fmtMoney(e.timberCost);
+  // Update displayed rates in the scaffold buttons
+  document.getElementById('rate-edge').textContent = rates.extras.edgeProtection;
+  document.getElementById('rate-platform').textContent = rates.extras.platformScaffold;
+}
+
+document.getElementById('estArea').addEventListener('input', () => { estAreaManualOverride = true; refreshEstimate(); });
+document.getElementById('ex-strip-qty').addEventListener('input', () => { stripQtyManualOverride = true; refreshEstimate(); });
+document.getElementById('ex-scaffold-qty').addEventListener('input', () => { scaffoldQtyManualOverride = true; refreshEstimate(); });
+document.getElementById('ex-timber-qty').addEventListener('input', refreshEstimate);
+document.getElementById('ex-strip-toggle').addEventListener('change', refreshEstimate);
+document.getElementById('ex-scaffold-toggle').addEventListener('change', refreshEstimate);
+document.getElementById('ex-timber-toggle').addEventListener('change', refreshEstimate);
+
+function useMeasured(){
+  estAreaManualOverride = false;
+  scaffoldQtyManualOverride = false;
+  stripQtyManualOverride = false;
+  refreshTotals();
+}
+
+function toggleEditor(){
+  const ed = document.getElementById('editor');
+  ed.style.display = (ed.style.display === 'none' || !ed.style.display) ? 'block' : 'none';
+  if(ed.style.display === 'block'){
+    document.querySelectorAll('[data-rate]').forEach(inp => {
+      const path = inp.dataset.rate.split('.');
+      let v = rates;
+      for(const k of path) v = v ? v[k] : undefined;
+      inp.value = v != null ? v : '';
+      inp.oninput = () => {
+        const p = inp.dataset.rate.split('.');
+        const newVal = parseFloat(inp.value) || 0;
+        if(p.length === 1) rates[p[0]] = newVal;
+        else { rates[p[0]] = rates[p[0]] || {}; rates[p[0]][p[1]] = newVal; }
+        saveRates(rates);
+        refreshEstimate();
+      };
+    });
+  }
+}
+function resetRates(){
+  if(!confirm('Reset all rates to defaults?')) return;
+  rates = JSON.parse(JSON.stringify(RATE_DEFAULTS));
+  saveRates(rates);
+  toggleEditor(); toggleEditor();
+  refreshEstimate();
+}
+
+// ═══ COPY / EXPORT ═══════════════════════════════════════════════════
+function buildEstimateText(){
+  const e = calcEstimate();
+  const lines = [];
+  lines.push('═══ ROOF ESTIMATE — The Roof Hub Limited ═══');
+  lines.push('Date: ' + new Date().toLocaleDateString('en-NZ'));
+  lines.push('Roof type: ' + TYPE_LABELS[currentType]);
+  lines.push('Roof area: ' + e.area.toFixed(1) + ' m²');
+  lines.push('Pitch: ' + currentPitch + '°');
+  lines.push('');
+  lines.push('Materials: ' + fmtMoney(e.materials));
+  lines.push('Labour: ' + fmtMoney(e.labour));
+  if(e.conversion > 0) lines.push('Strip + new purlins + hardfill (tile→metal): ' + fmtMoney(e.conversion));
+  if(e.stripCost > 0) lines.push('Strip existing roof (' + e.stripQty.toFixed(1) + ' m²): ' + fmtMoney(e.stripCost));
+  if(e.scaffoldCost > 0) lines.push((scaffoldMode === 'platform' ? 'Platform scaffold' : 'Edge protection') + ' (' + e.scaffoldQty.toFixed(1) + ' lm × $' + e.scaffoldRate + '/lm): ' + fmtMoney(e.scaffoldCost));
+  if(e.timberCost > 0) lines.push('Damaged timber allowance (' + e.timberQty.toFixed(0) + ' lm × $' + rates.extras.timberPerLm + '/lm): ' + fmtMoney(e.timberCost));
+  lines.push('Subtotal: ' + fmtMoney(e.subtotal));
+  lines.push('Margin (' + rates.margin + '%): ' + fmtMoney(e.margin));
+  lines.push('Sub price (excl GST): ' + fmtMoney(e.exclGST));
+  if(gstIncluded) lines.push('GST 15%: ' + fmtMoney(e.gst));
+  lines.push('');
+  lines.push('TOTAL ' + (gstIncluded ? '(incl GST)' : '(excl GST)') + ': ' + fmtMoney(e.total));
+  lines.push('Effective rate: $' + e.perM.toFixed(0) + '/m²');
+  lines.push('');
+  lines.push('NOTE: Indicative estimate only. Final quote subject to site measure and scope confirmation.');
+  return lines.join('\n');
+}
+function buildSummary(){
+  const totalFp = shapes.reduce((s,x)=>s+x.footprintM2,0);
+  const totalRoof = shapes.reduce((s,x)=>s+x.footprintM2*pitchMultiplier(x.pitch),0);
+  const totalPeri = shapes.reduce((s,x)=>s+x.perimeterM,0);
+  const center = map.getCenter();
+  const lines = [];
+  lines.push('═══ ROOF MEASUREMENT — The Roof Hub Limited ═══');
+  lines.push('Date: ' + new Date().toLocaleString('en-NZ'));
+  lines.push('Map centre: ' + center.lat.toFixed(6) + ', ' + center.lng.toFixed(6));
+  lines.push('');
+  lines.push('Sections:');
+  shapes.forEach((s,i)=>{
+    const m = pitchMultiplier(s.pitch);
+    const roof = s.footprintM2 * m;
+    lines.push('  ' + (i+1) + '. ' + s.label + ' — ' + s.footprintM2.toFixed(1) + ' m² × ' + m.toFixed(3) + ' (' + s.pitch + '°) = ' + roof.toFixed(1) + ' m² · perimeter ' + s.perimeterM.toFixed(1) + ' lm');
+  });
+  lines.push('');
+  lines.push('TOTAL FOOTPRINT: ' + totalFp.toFixed(1) + ' m²');
+  lines.push('TOTAL PERIMETER: ' + totalPeri.toFixed(1) + ' lm');
+  lines.push('TOTAL ROOF AREA: ' + totalRoof.toFixed(1) + ' m²');
+  return lines.join('\n');
+}
+function flashStatus(msg){
+  const el = document.getElementById('copyStatus');
+  el.textContent = msg;
+  setTimeout(() => { el.textContent = ''; }, 2500);
+}
+function copyEstimate(){
+  navigator.clipboard.writeText(buildEstimateText()).then(() => flashStatus('✓ Estimate copied to clipboard'));
+}
+function copyMeasurement(){
+  navigator.clipboard.writeText(buildSummary()).then(() => flashStatus('✓ Measurement summary copied'));
+}
+
+// ═══ INIT ═════════════════════════════════════════════════════════════
+// Set initial timber allowance from saved rates
+document.getElementById('ex-timber-qty').value = rates.extras.timberAllowanceLm;
+refreshList(); refreshTotals(); setRoofType('gable'); setGST(true); refreshEstimate();
+</script>
+</body>
+</html>
