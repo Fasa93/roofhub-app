@@ -12,8 +12,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#f4f5f7;color:#1a1a2e;font-family:'DM Sans',sans-serif;min-height:100vh;}
+body{background:#f4f5f7;color:#1a1a2e;font-family:'DM Sans',sans-serif;min-height:100vh;-webkit-text-size-adjust:100%;}
 input,select,textarea{font-family:'DM Sans',sans-serif;}
+/* ── Mobile / phone overrides (iPhones, Android) ── */
+@media (max-width:480px){
+  /* iOS zooms when input font-size <16px on focus — keep it 16px to prevent that */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="search"],
+  input[type="password"],
+  input[type="date"],
+  input[type="time"],
+  input:not([type]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  /* Bigger tap targets for the AI helper button so it's reachable with a thumb */
+  button[type="button"][title^="Improve"],
+  button[type="button"][title^="Type"] {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+  /* Modals: tighten padding so content isn't squeezed */
+  body { font-size: 14px; }
+}
 </style>
 </head>
 <body>
@@ -2926,7 +2951,15 @@ function JobsView({jobs,setJobs,clients,setClients,quotes=[],setQuotes,setTab,us
   }):statusFiltered;
   function oe(j){setEd(j);setFm({client:j.client,address:j.address,type:j.type,status:j.status,date:j.date,endDate:j.endDate||j.date,startTime:j.startTime||"07:00",endTime:j.endTime||"15:30",staff:j.staff,notes:j.notes,phone:j.phone,email:j.email,ssspRequired:j.ssspRequired||false,ssspCompleted:j.ssspCompleted||false,sssp:j.sssp||null,photos:j.photos||[],confirmationSent:j.confirmationSent||false,jsa:j.jsa||null,roofReport:j.roofReport||null,jobReport:j.jobReport||null,qaReport:j.qaReport||null,variations:j.variations||[],completion:j.completion||null});setSf(true);}
   function sv(){
-    if(!fm.client||!fm.date)return;
+    // Validate required fields with clear feedback (was silently failing before)
+    if(!fm.client||!fm.client.trim()){
+      alert("⚠️ Client name is required.\n\nType the client's name in the 'Client Name' field at the top of the form, then try again.");
+      return;
+    }
+    if(!fm.date){
+      alert("⚠️ Start date is required.\n\nPick a date in the 'Start Date' field, then try again.");
+      return;
+    }
     // Auto-set endDate to same as date if empty
     const out={...fm,endDate:fm.endDate||fm.date};
     // Conflict check: block overlapping jobs for the same staff member on any day/time in the range
@@ -3512,7 +3545,15 @@ function CalendarView({jobs,setJobs,clients,events=[]}){
     setNewJob(f=>({...f,type,ssspRequired:shouldRequire}));
   }
   function saveNewJob(){
-    if(!newJob.client)return;
+    // Validate required fields with clear feedback (was silently failing before)
+    if(!newJob.client||!newJob.client.trim()){
+      alert("⚠️ Client name is required.\n\nType the client's name in the 'Client Name' field, then try again.");
+      return;
+    }
+    if(!newJob.date){
+      alert("⚠️ Start date is required.\n\nPick a date in the 'Date' field, then try again.");
+      return;
+    }
     const out={...newJob,endDate:newJob.endDate||newJob.date};
     // Overlap check — block if any assigned staff member is already on an overlapping job
     if((out.staff||[]).length&&out.date&&out.startTime&&out.endTime){
@@ -4055,9 +4096,17 @@ function ScheduleView({jobs,setJobs,resetTick,clients=[],setClients}){
   },[resetTick]);
   
   function save(){
-    if(!fm.client||!fm.date) return;
+    // Validate required fields with clear feedback (was silently failing before)
+    if(!fm.client||!fm.client.trim()){
+      alert("⚠️ Client name is required.\n\nType the client's name, then try again.");
+      return;
+    }
+    if(!fm.date){
+      alert("⚠️ Date is required.\n\nPick a date, then try again.");
+      return;
+    }
     setJobs(j=>[...j,{...fm,id:Date.now()}]);
-    
+
     // Auto-save client to Clients directory (same as JobsView)
     if(setClients&&fm.client&&fm.client.trim()){
       const trimmedName=fm.client.trim();

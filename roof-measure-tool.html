@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
@@ -392,8 +393,9 @@ header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
 
         <div class="actions">
           <button class="btn-success" onclick="copyEstimate()">📋 Copy estimate</button>
+          <button class="btn-success" onclick="saveEstimatePDF()" style="background:#16a34a;font-size:14px;padding:14px;">📥 Save Estimate as PDF</button>
           <button class="btn-blue" onclick="copyMeasurement()">📋 Copy measurement summary</button>
-          <button class="btn-secondary" onclick="saveEstimatePDF()">🖨️ Save as PDF / Print</button>
+          <button class="btn-secondary" onclick="printEstimate()">🖨️ Print to printer</button>
         </div>
         <div id="copyStatus" style="font-size:11px;color:#fbbf24;margin-top:8px;text-align:center;min-height:14px;"></div>
 
@@ -1020,8 +1022,10 @@ function copyMeasurement(){
   navigator.clipboard.writeText(buildSummary()).then(() => flashStatus('✓ Measurement summary copied'));
 }
 
-// ═══ SAVE AS PDF — proper printable estimate report ═══════════════════
-function saveEstimatePDF(){
+// ═══ SAVE / PRINT ESTIMATE — direct PDF download (no popup) ═══════════
+// Uses html2pdf.js (loaded in <head>) to render the estimate report and trigger
+// a real download to the user's Downloads folder. No print dialog needed.
+function buildReportHTML(){
   const LOGO_SRC = (document.querySelector('header img') || {}).src || '';
   const e = calcEstimate();
   const address = (document.getElementById('search').value || '').trim() || 'Site address — please confirm';
@@ -1156,28 +1160,87 @@ table td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
 
     <div class="foot">Generated ${new Date().toLocaleString('en-NZ')} · The Roof Hub Limited · We don't cut corners — we fix them properly.</div>
   </div>
-  <script>
-    // Auto-trigger the print dialog once the page is ready
-    window.addEventListener('load', function(){
-      setTimeout(function(){ window.print(); }, 350);
-    });
-  <\/script>
 </body>
 </html>`;
 
-  // Open in a new window. Some popup blockers will block this if not user-triggered;
-  // the click handler is the user trigger so it should pass.
-  const w = window.open('', '_blank', 'width=900,height=1100');
-  if(!w){
-    flashStatus('✗ Pop-up blocked — allow pop-ups in browser settings');
-    document.getElementById('copyStatus').style.color = '#fca5a5';
-    setTimeout(() => { document.getElementById('copyStatus').style.color = '#fbbf24'; }, 3000);
+  return { html, address };
+}
+
+// ═══ DIRECT PDF DOWNLOAD ═════════════════════════════════════════════
+// Renders the report into a hidden div and uses html2pdf to save directly
+// to Downloads — no popup window, no print dialog confusion.
+function saveEstimatePDF(){
+  if(typeof html2pdf === 'undefined'){
+    flashStatus('✗ PDF library still loading — refresh the page and try again');
     return;
   }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  flashStatus('✓ Print window opened — choose "Save as PDF" in destination');
+  const r = buildReportHTML();
+  const filename = 'Roof Estimate - ' + (r.address.split(',')[0] || 'Quote') + ' - ' + new Date().toISOString().substring(0,10) + '.pdf';
+
+  flashStatus('⏳ Generating PDF…');
+
+  // Pull just the body content (everything inside <body>...</body>) for rendering
+  const bodyMatch = r.html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const bodyContent = bodyMatch ? bodyMatch[1] : r.html;
+  // Pull the <style> block so the rendered div has the same CSS
+  const styleMatch = r.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  const styleContent = styleMatch ? styleMatch[1] : '';
+
+  // Strip the toolbar+banner from the body so they don't appear in the PDF
+  // (those exist only for the print-dialog flow).
+  const cleanBody = bodyContent
+    .replace(/<div class="banner">[\s\S]*?<\/div>/i, '')
+    .replace(/<div class="toolbar">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/i, '')
+    .replace(/<div class="toolbar">[\s\S]*?<\/div>/i, '');
+
+  const container = document.createElement('div');
+  container.id = 'rh-pdf-render';
+  container.style.cssText = 'position:absolute;top:0;left:-9999px;width:794px;background:#fff;color:#1a1a2e;';
+  container.innerHTML = '<style>'+styleContent+'</style>'+cleanBody;
+  document.body.appendChild(container);
+
+  // Wait two animation frames so layout settles, then generate PDF
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const opt = {
+      margin: [10, 10, 12, 10],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.96 },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#ffffff', letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['table', 'tr', 'h2', '.note', '.terms', '.header'] }
+    };
+    html2pdf().from(container).set(opt).save().then(() => {
+      container.remove();
+      flashStatus('✓ PDF saved to Downloads');
+    }).catch((err) => {
+      container.remove();
+      console.error('[saveEstimatePDF]', err);
+      flashStatus('✗ PDF generation failed: ' + (err && err.message ? err.message : 'unknown'));
+    });
+  }));
+}
+
+// ═══ PRINT TO PRINTER ═════════════════════════════════════════════════
+// Opens a new window with the report and triggers print dialog. User can
+// either save as PDF here OR send to a real printer.
+function printEstimate(){
+  const r = buildReportHTML();
+  // Inject auto-print script before </body>
+  const printable = r.html.replace('</body>', '<scr'+'ipt>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});</scr'+'ipt></body>');
+  // Try iframe first (no popup blocker issues)
+  let frame = document.getElementById('rh-print-frame');
+  if(frame) frame.remove();
+  frame = document.createElement('iframe');
+  frame.id = 'rh-print-frame';
+  frame.style.cssText = 'position:fixed;right:-9999px;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(frame);
+  // Use srcdoc for reliable cross-browser load
+  frame.srcdoc = printable;
+  flashStatus('⏳ Opening print dialog…');
+  // Fallback: also offer a popup window in case iframe didn't trigger print
+  setTimeout(() => {
+    flashStatus('🖨️ If no print dialog appeared, allow pop-ups and try again');
+  }, 3000);
 }
 
 // ═══ INIT ═════════════════════════════════════════════════════════════
