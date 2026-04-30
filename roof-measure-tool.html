@@ -294,8 +294,7 @@ header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
           <div class="est-row" id="rowExStrip" style="display:none;"><span class="lbl">Strip existing roof</span><span class="val" id="brkExStrip">$0</span></div>
           <div class="est-row" id="rowExScaffold" style="display:none;"><span class="lbl" id="lblExScaffold">Edge protection</span><span class="val" id="brkExScaffold">$0</span></div>
           <div class="est-row" id="rowExTimber" style="display:none;"><span class="lbl">Damaged timber allowance</span><span class="val" id="brkExTimber">$0</span></div>
-          <div class="est-row subtotal"><span class="lbl">Subtotal</span><span class="val" id="brkSubtotal">$0</span></div>
-          <div class="est-row"><span class="lbl">Margin (<span id="marginPct">25</span>%)</span><span class="val" id="brkMargin">$0</span></div>
+          <div class="est-row subtotal"><span class="lbl">Subtotal (excl GST)</span><span class="val" id="brkSubtotal">$0</span></div>
           <div class="est-row" id="rowGST"><span class="lbl">GST (15%)</span><span class="val" id="brkGST">$0</span></div>
           <div class="est-row total"><span class="lbl">TOTAL</span><span class="val" id="brkTotal">$0</span></div>
         </div>
@@ -352,6 +351,19 @@ header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
           <button class="btn-secondary" onclick="window.print()">🖨️ Print / Save PDF</button>
         </div>
         <div id="copyStatus" style="font-size:11px;color:#fbbf24;margin-top:8px;text-align:center;min-height:14px;"></div>
+
+        <!-- ═══ TERMS & CONDITIONS ═══ -->
+        <div class="extras-card" style="margin-top:14px;">
+          <div class="extras-title" style="display:flex;justify-content:space-between;align-items:center;">📜 Terms & Conditions <button onclick="toggleTerms()" id="termsToggle" style="background:transparent;border:none;color:#fbbf24;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Show / Edit</button></div>
+          <div id="termsPanel" style="display:none;">
+            <textarea id="termsInput" rows="14" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:8px;padding:10px;font-size:11.5px;font-family:inherit;line-height:1.5;resize:vertical;box-sizing:border-box;"></textarea>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button onclick="saveTerms()" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">💾 Save terms</button>
+              <button onclick="resetTerms()" style="background:rgba(220,38,38,0.2);color:#fca5a5;border:1px solid rgba(220,38,38,0.5);padding:7px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">↺ Reset to defaults</button>
+            </div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:6px;line-height:1.4;">These terms appear at the bottom of every estimate you copy or print.</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -758,15 +770,35 @@ function calcEstimate(){
   const timberQty = parseFloat(document.getElementById('ex-timber-qty').value) || 0;
   const timberCost = timberOn ? timberQty * rates.extras.timberPerLm : 0;
 
-  const subtotal = materials + labour + conversion + stripCost + scaffoldCost + timberCost;
-  const margin = subtotal * (rates.margin / 100);
-  const exclGST = subtotal + margin;
+  const rawSubtotal = materials + labour + conversion + stripCost + scaffoldCost + timberCost;
+  const margin = rawSubtotal * (rates.margin / 100);
+  const exclGST = rawSubtotal + margin;
   const gst = exclGST * 0.15;
   const total = gstIncluded ? exclGST + gst : exclGST;
-  return { area, materials, labour, conversion, stripCost, scaffoldCost, timberCost,
-           stripQty, scaffoldQty, scaffoldRate, timberQty,
-           subtotal, margin, gst, exclGST, total,
-           perM: area > 0 ? total / area : 0 };
+  // Margin baked into each line item proportionally so customer doesn't see
+  // a "margin" line. Math is identical: each item × (1 + margin%).
+  const mm = 1 + (rates.margin / 100);
+  return {
+    area,
+    // BREAKDOWN values (margin baked in — what shows on the receipt)
+    materials: materials * mm,
+    labour: labour * mm,
+    conversion: conversion * mm,
+    stripCost: stripCost * mm,
+    scaffoldCost: scaffoldCost * mm,
+    timberCost: timberCost * mm,
+    // RAW values (for toggle-row arithmetic that shows qty × rate = $X)
+    stripCostRaw: stripCost,
+    scaffoldCostRaw: scaffoldCost,
+    timberCostRaw: timberCost,
+    stripQty, scaffoldQty, scaffoldRate, timberQty,
+    // totals
+    subtotal: exclGST,    // displayed subtotal = excl GST (margin already in)
+    margin,                // internal only
+    rawSubtotal,           // internal only
+    gst, exclGST, total,
+    perM: area > 0 ? total / area : 0
+  };
 }
 
 function refreshEstimate(){
@@ -785,14 +817,13 @@ function refreshEstimate(){
   document.getElementById('rowExTimber').style.display = (e.timberCost > 0 ? 'flex' : 'none');
   document.getElementById('brkExTimber').textContent = fmtMoney(e.timberCost);
   document.getElementById('brkSubtotal').textContent = fmtMoney(e.subtotal);
-  document.getElementById('brkMargin').textContent = fmtMoney(e.margin);
-  document.getElementById('marginPct').textContent = rates.margin;
   document.getElementById('brkGST').textContent = fmtMoney(e.gst);
   document.getElementById('brkTotal').textContent = fmtMoney(e.total);
-  // Update the per-extra cost displays in the toggle rows
-  document.getElementById('ex-strip-cost').textContent = fmtMoney(e.stripCost);
-  document.getElementById('ex-scaffold-cost').textContent = fmtMoney(e.scaffoldCost);
-  document.getElementById('ex-timber-cost').textContent = fmtMoney(e.timberCost);
+  // Update the per-extra cost displays in the toggle rows — RAW values
+  // (so 12 lm × $50/lm = $600 still matches arithmetic the user sees)
+  document.getElementById('ex-strip-cost').textContent = fmtMoney(e.stripCostRaw);
+  document.getElementById('ex-scaffold-cost').textContent = fmtMoney(e.scaffoldCostRaw);
+  document.getElementById('ex-timber-cost').textContent = fmtMoney(e.timberCostRaw);
   // Update displayed rates in the scaffold buttons
   document.getElementById('rate-edge').textContent = rates.extras.edgeProtection;
   document.getElementById('rate-platform').textContent = rates.extras.platformScaffold;
@@ -842,30 +873,72 @@ function resetRates(){
 }
 
 // ═══ COPY / EXPORT ═══════════════════════════════════════════════════
+// ═══ TERMS & CONDITIONS ═══════════════════════════════════════════════
+const TERMS_DEFAULT = [
+  '1. This is an indicative estimate based on satellite/site information. Final pricing is subject to a physical site measure and scope confirmation.',
+  '2. Quote is valid for 30 days from the date of issue.',
+  '3. Excludes any work required due to hidden damage (rot, asbestos, structural issues) discovered during work — additional cost to be advised in writing before proceeding.',
+  '4. Excludes building consents, resource consents, and scaffolding hire beyond the standard scope unless explicitly stated.',
+  '5. Payment terms: 30% deposit on acceptance, 50% on materials delivered to site, balance on practical completion. 7-day payment terms thereafter.',
+  '6. Weather delays may extend the agreed timeline. The Roof Hub is not liable for delays caused by adverse weather.',
+  '7. All variations to scope must be approved in writing before work commences.',
+  '8. Workmanship is guaranteed for 10 years from the date of completion. Material warranties as per manufacturer (typically 15-30 years on Colorsteel).',
+  '9. The Roof Hub Limited operates a Site Safe / SiteWise H&S system. PCBU duties apply on shared sites.',
+  '10. By accepting this quote, the customer agrees to The Roof Hub Limited\'s standard terms of trade.'
+].join('\n');
+
+function getTerms(){
+  return localStorage.getItem('roofhub_terms') || TERMS_DEFAULT;
+}
+function saveTerms(){
+  const v = document.getElementById('termsInput').value.trim();
+  localStorage.setItem('roofhub_terms', v);
+  flashStatus('✓ Terms saved — they\'ll appear on every estimate');
+}
+function resetTerms(){
+  if(!confirm('Reset terms to default Roof Hub T&Cs?')) return;
+  localStorage.removeItem('roofhub_terms');
+  document.getElementById('termsInput').value = TERMS_DEFAULT;
+  flashStatus('↺ Terms reset to defaults');
+}
+function toggleTerms(){
+  const panel = document.getElementById('termsPanel');
+  if(panel.style.display === 'none' || !panel.style.display){
+    document.getElementById('termsInput').value = getTerms();
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
 function buildEstimateText(){
   const e = calcEstimate();
   const lines = [];
   lines.push('═══ ROOF ESTIMATE — The Roof Hub Limited ═══');
+  lines.push('98 Hillsborough Road, Hillsborough, Auckland 1042');
+  lines.push('0204 173 9390 · fasa@theroofhub.co.nz · theroofhub.co.nz');
+  lines.push('');
   lines.push('Date: ' + new Date().toLocaleDateString('en-NZ'));
   lines.push('Roof type: ' + TYPE_LABELS[currentType]);
   lines.push('Roof area: ' + e.area.toFixed(1) + ' m²');
   lines.push('Pitch: ' + currentPitch + '°');
   lines.push('');
+  lines.push('── BREAKDOWN ──');
   lines.push('Materials: ' + fmtMoney(e.materials));
   lines.push('Labour: ' + fmtMoney(e.labour));
   if(e.conversion > 0) lines.push('Strip + new purlins + hardfill (tile→metal): ' + fmtMoney(e.conversion));
   if(e.stripCost > 0) lines.push('Strip existing roof (' + e.stripQty.toFixed(1) + ' m²): ' + fmtMoney(e.stripCost));
-  if(e.scaffoldCost > 0) lines.push((scaffoldMode === 'platform' ? 'Platform scaffold' : 'Edge protection') + ' (' + e.scaffoldQty.toFixed(1) + ' lm × $' + e.scaffoldRate + '/lm): ' + fmtMoney(e.scaffoldCost));
-  if(e.timberCost > 0) lines.push('Damaged timber allowance (' + e.timberQty.toFixed(0) + ' lm × $' + rates.extras.timberPerLm + '/lm): ' + fmtMoney(e.timberCost));
-  lines.push('Subtotal: ' + fmtMoney(e.subtotal));
-  lines.push('Margin (' + rates.margin + '%): ' + fmtMoney(e.margin));
-  lines.push('Sub price (excl GST): ' + fmtMoney(e.exclGST));
+  if(e.scaffoldCost > 0) lines.push((scaffoldMode === 'platform' ? 'Platform scaffold' : 'Edge protection') + ' (' + e.scaffoldQty.toFixed(1) + ' lm): ' + fmtMoney(e.scaffoldCost));
+  if(e.timberCost > 0) lines.push('Damaged timber allowance (' + e.timberQty.toFixed(0) + ' lm): ' + fmtMoney(e.timberCost));
+  lines.push('');
+  lines.push('Subtotal (excl GST): ' + fmtMoney(e.exclGST));
   if(gstIncluded) lines.push('GST 15%: ' + fmtMoney(e.gst));
   lines.push('');
   lines.push('TOTAL ' + (gstIncluded ? '(incl GST)' : '(excl GST)') + ': ' + fmtMoney(e.total));
   lines.push('Effective rate: $' + e.perM.toFixed(0) + '/m²');
   lines.push('');
-  lines.push('NOTE: Indicative estimate only. Final quote subject to site measure and scope confirmation.');
+  lines.push('── TERMS & CONDITIONS ──');
+  lines.push(getTerms());
   return lines.join('\n');
 }
 function buildSummary(){
