@@ -5650,13 +5650,51 @@ function QuotesView({quotes,setQuotes,clients,jobs,setJobs,setTab,onBack}){
   }
   
   function save(){
-    if(!fm.client||!fm.address){alert("Please fill in client and address at minimum.");return;}
-    if(editing){
-      setQuotes(quotes.map(q=>q.id===editing.id?{...editing,...fm}:q));
-    }else{
-      setQuotes(q=>[...q,{...fm,id:Date.now()}]);
+    try {
+      // Validate required fields with clear feedback
+      if(!fm.client||!fm.client.trim()){
+        alert("⚠️ Client name is required.\n\nType the client's name at the top of the quote, then try again.");
+        return;
+      }
+      if(!fm.address||!fm.address.trim()){
+        alert("⚠️ Site address is required.\n\nFill in the address field, then try again.");
+        return;
+      }
+      // Auto-generate quote number if missing (in case it got cleared)
+      const safeQuoteNumber = fm.quoteNumber && fm.quoteNumber.trim() ? fm.quoteNumber : generateQuoteNumber();
+      // Sanitize items — strip empty rows, coerce numbers
+      const safeItems = (fm.items||[]).filter(it => it && (it.desc||"").trim()).map(it => ({
+        desc: String(it.desc||"").trim(),
+        qty: parseFloat(it.qty)||0,
+        unit: it.unit||"m²",
+        rate: parseFloat(it.rate)||0
+      }));
+      const fmSafe = {...fm, quoteNumber: safeQuoteNumber, items: safeItems.length ? safeItems : [{desc:"",qty:1,unit:"m²",rate:0}]};
+
+      if(editing){
+        const list = Array.isArray(quotes) ? quotes : [];
+        setQuotes(list.map(q=>q.id===editing.id?{...editing,...fmSafe}:q));
+      }else{
+        setQuotes(q=>{
+          const list = Array.isArray(q) ? q : [];
+          return [...list,{...fmSafe,id:Date.now()}];
+        });
+      }
+      setShowForm(false);setEditing(null);setFm(bl);
+      // Tiny delay so React has flushed before we show the toast
+      setTimeout(()=>{
+        // Use a non-blocking toast (alert is annoying for success)
+        const toast = document.createElement('div');
+        toast.textContent = editing ? '✓ Quote updated' : '✓ Quote saved';
+        toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 20px;border-radius:8px;font-weight:700;font-family:DM Sans,sans-serif;font-size:14px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.2);';
+        document.body.appendChild(toast);
+        setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity 0.4s';},1800);
+        setTimeout(()=>{if(toast.parentNode)toast.parentNode.removeChild(toast);},2300);
+      }, 50);
+    } catch(err){
+      console.error('[Quote save] failed:', err);
+      alert("⚠️ Couldn't save the quote — error: "+(err && err.message ? err.message : 'unknown')+"\n\nPlease screenshot this and send to Fasa.");
     }
-    setShowForm(false);setEditing(null);setFm(bl);
   }
   
   function del(q){
