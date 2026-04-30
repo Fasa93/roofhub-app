@@ -119,9 +119,54 @@ header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
 .scaffold-options button.active{background:rgba(204,0,0,0.25);border-color:#cc0000;color:#fff;}
 .warn-banner{background:rgba(252,191,36,0.15);border:1px solid rgba(252,191,36,0.4);color:#fde68a;padding:7px 10px;border-radius:6px;font-size:11px;margin:8px 0;line-height:1.4;}
 
+/* ── Tablet / mid-width ── */
+@media (max-width:980px){
+  .sidebar{width:300px;}
+}
+/* ── Phone ── */
 @media (max-width:780px){
-  .sidebar{width:100%;border-left:none;border-top:1px solid #e5e7eb;max-height:60%;}
   .main{flex-direction:column;}
+  .map-wrap{flex:none;height:50vh;min-height:300px;}
+  .sidebar{width:100%;border-left:none;border-top:1px solid #e5e7eb;max-height:none;flex:1;}
+  header{padding:8px 12px;gap:8px;}
+  header img{height:34px;}
+  header h1{font-size:14px;}
+  header > div:last-child{display:none;} /* hide tagline on phone */
+  .search-row{padding:8px 10px;gap:6px;}
+  .search-row .search-wrap{min-width:0;width:100%;}
+  .search-row button{padding:9px 10px;font-size:12px;}
+  .pitch-grid{grid-template-columns:repeat(4,1fr);gap:4px;}
+  .pitch-grid button{padding:10px 2px;font-size:11px;}
+  .pitch-custom{font-size:11px;}
+  .type-grid{gap:4px;}
+  .type-btn{padding:10px 4px;font-size:10px;min-height:54px;}
+  .type-btn .small{font-size:9px;}
+  .section{padding:12px;}
+  .section h3{font-size:10px;}
+  .measure-btn{padding:13px;font-size:14px;} /* bigger tap target */
+  .est-area-input input{font-size:16px;} /* prevent iOS zoom */
+  .est-area-input button{padding:10px 8px;font-size:10px;}
+  .extra-row .qty-input{font-size:16px;}
+  .gst-toggle button{padding:9px 6px;font-size:11px;}
+  .scaffold-options button{padding:9px 4px;font-size:10px;}
+  .big-total .price{font-size:24px;}
+  .big-total{padding:12px;}
+  .est-row{font-size:12px;}
+  .est-row.total{font-size:13px;}
+  .actions button{padding:13px;font-size:13px;} /* bigger tap target */
+  .suggest-list{max-height:50vh;}
+  .suggest-item{padding:12px;} /* easier tapping */
+  .suggest-item .label .main{font-size:13px;}
+  /* Force min 44px touch target on all buttons (Apple HIG) */
+  button, a.btn-primary, a.btn-secondary { min-height: 36px; }
+}
+/* ── Very narrow phones (e.g. iPhone SE 320px) ── */
+@media (max-width:380px){
+  header h1{font-size:13px;}
+  header img{height:30px;}
+  .pitch-grid{grid-template-columns:repeat(3,1fr);}
+  .type-btn{font-size:9px;}
+  .est-row{font-size:11px;}
 }
 </style>
 </head>
@@ -348,7 +393,7 @@ header h1{font-size:16px;font-weight:800;letter-spacing:0.4px;flex:1;}
         <div class="actions">
           <button class="btn-success" onclick="copyEstimate()">📋 Copy estimate</button>
           <button class="btn-blue" onclick="copyMeasurement()">📋 Copy measurement summary</button>
-          <button class="btn-secondary" onclick="window.print()">🖨️ Print / Save PDF</button>
+          <button class="btn-secondary" onclick="saveEstimatePDF()">🖨️ Save as PDF / Print</button>
         </div>
         <div id="copyStatus" style="font-size:11px;color:#fbbf24;margin-top:8px;text-align:center;min-height:14px;"></div>
 
@@ -973,6 +1018,166 @@ function copyEstimate(){
 }
 function copyMeasurement(){
   navigator.clipboard.writeText(buildSummary()).then(() => flashStatus('✓ Measurement summary copied'));
+}
+
+// ═══ SAVE AS PDF — proper printable estimate report ═══════════════════
+function saveEstimatePDF(){
+  const LOGO_SRC = (document.querySelector('header img') || {}).src || '';
+  const e = calcEstimate();
+  const address = (document.getElementById('search').value || '').trim() || 'Site address — please confirm';
+  const totalFp = shapes.reduce((s,x)=>s+x.footprintM2,0);
+  const totalRoof = shapes.reduce((s,x)=>s+x.footprintM2*pitchMultiplier(x.pitch),0);
+  const totalPeri = shapes.reduce((s,x)=>s+x.perimeterM,0);
+  const today = new Date().toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'});
+
+  // Sections rows
+  const sectionsRows = shapes.length === 0
+    ? '<tr><td colspan="5" style="padding:20px;text-align:center;color:#9ca3af;font-style:italic;">No sections traced — m² entered manually</td></tr>'
+    : shapes.map((s,i) => {
+        const m = pitchMultiplier(s.pitch);
+        const roof = s.footprintM2 * m;
+        return '<tr><td>'+(i+1)+'. '+s.label+'</td><td style="text-align:right;">'+s.footprintM2.toFixed(1)+' m²</td><td style="text-align:right;">'+s.pitch.toFixed(1)+'°</td><td style="text-align:right;">×'+m.toFixed(3)+'</td><td style="text-align:right;font-weight:700;">'+roof.toFixed(1)+' m²</td></tr>';
+      }).join('');
+
+  // Estimate breakdown rows (margin baked in)
+  const erows = [];
+  if(e.materials > 0)    erows.push(['Materials',                                        e.materials]);
+  if(e.labour > 0)       erows.push(['Labour',                                           e.labour]);
+  if(e.conversion > 0)   erows.push(['Strip + new purlins + hardfill (tile→metal)',      e.conversion]);
+  if(e.stripCost > 0)    erows.push(['Strip & remove existing roof ('+e.stripQty.toFixed(1)+' m²)', e.stripCost]);
+  if(e.scaffoldCost > 0){
+    const lbl = (scaffoldMode==='platform'?'Platform scaffold':'Edge protection') + ' ('+e.scaffoldQty.toFixed(1)+' lm)';
+    erows.push([lbl, e.scaffoldCost]);
+  }
+  if(e.timberCost > 0)   erows.push(['Damaged timber allowance ('+e.timberQty.toFixed(0)+' lm)', e.timberCost]);
+  const breakdownRows = erows.map(r =>
+    '<tr><td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;">'+r[0]+'</td><td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:700;">'+fmtMoney(r[1])+'</td></tr>'
+  ).join('');
+
+  const terms = getTerms().split('\n').map(line => line.trim()).filter(Boolean).map(line =>
+    '<li style="margin-bottom:6px;">'+line.replace(/^\d+\.\s*/,'').replace(/</g,'&lt;')+'</li>'
+  ).join('');
+
+  // Use a blob URL so the new window has its own origin and is reliable across browsers
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Roof Estimate — ${(address+' · The Roof Hub').replace(/</g,'&lt;')}</title>
+<style>
+@page { size: A4; margin: 14mm 12mm; }
+* { box-sizing: border-box; }
+body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a2e; margin: 0; padding: 0; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
+.banner { background: #fffbeb; border-bottom: 2px solid #fde68a; padding: 10px 18px; font-size: 12px; color: #78350f; text-align: center; line-height: 1.5; }
+.banner b { color: #cc0000; }
+.toolbar { background: #1a1a2e; padding: 8px 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.toolbar button { background: #16a34a; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; font-family: inherit; }
+.toolbar button.alt { background: #fff; color: #1a1a2e; }
+@media print {
+  .banner, .toolbar { display: none !important; }
+}
+.page { max-width: 210mm; margin: 0 auto; padding: 16px 18px 30px; background: #fff; }
+.header { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; border-bottom: 3px solid #cc0000; margin-bottom: 18px; }
+.header img { height: 64px; background: #fff; padding: 4px 6px; border-radius: 6px; }
+.header .biz-name { font-weight: 800; font-size: 17px; letter-spacing: 0.4px; }
+.header .biz-meta { font-size: 11px; color: #6b7280; line-height: 1.6; margin-top: 2px; }
+h1 { font-size: 22px; color: #cc0000; margin: 0 0 4px 0; letter-spacing: 0.5px; }
+h2 { font-size: 13px; color: #1a1a2e; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1.5px solid #1a1a2e; padding-bottom: 4px; margin: 18px 0 10px 0; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 6px 0 10px 0; font-size: 12px; }
+.summary-grid .lbl { color: #6b7280; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+.summary-grid .val { color: #1a1a2e; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table th { background: #f9fafb; padding: 7px 10px; text-align: left; font-weight: 700; color: #6b7280; text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; border-bottom: 1.5px solid #e5e7eb; }
+table th.right { text-align: right; }
+table td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
+.totals { margin-top: 6px; }
+.totals tr.subtotal td { padding-top: 12px; font-weight: 700; border-top: 1.5px solid #1a1a2e; }
+.totals tr.gst td { font-size: 12px; color: #6b7280; }
+.totals tr.grand td { font-size: 17px; font-weight: 800; color: #cc0000; padding: 12px 10px; border-top: 2.5px solid #cc0000; background: #fef2f2; }
+.totals tr.rate td { font-size: 11px; color: #6b7280; padding-top: 4px; padding-bottom: 8px; }
+.terms { font-size: 10.5px; line-height: 1.55; color: #374151; }
+.terms ol { margin: 0; padding-left: 18px; }
+.foot { margin-top: 24px; padding-top: 10px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #9ca3af; }
+.note { background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 6px; font-size: 11px; color: #78350f; margin: 10px 0; }
+</style>
+</head>
+<body>
+  <div class="banner"><b>How to save:</b> Print dialog will open. In the destination dropdown, choose <b>"Save as PDF"</b> → click Save. The PDF will be saved to your Downloads folder.</div>
+  <div class="toolbar">
+    <strong style="color:#fff;font-size:13px;">📐 Roof Estimate — ${address.replace(/</g,'&lt;').replace(/"/g,'&quot;')}</strong>
+    <div>
+      <button onclick="window.print()">🖨️ Save as PDF / Print</button>
+      <button class="alt" onclick="window.close()">✕ Close</button>
+    </div>
+  </div>
+  <div class="page">
+    <div class="header">
+      <img src="${LOGO_SRC}" alt="The Roof Hub"/>
+      <div>
+        <div class="biz-name">THE ROOF HUB LIMITED</div>
+        <div class="biz-meta">98 Hillsborough Road, Hillsborough, Auckland 1042<br/>0204 173 9390 · fasa@theroofhub.co.nz · theroofhub.co.nz</div>
+      </div>
+    </div>
+
+    <h1>Roof Estimate</h1>
+    <div class="summary-grid">
+      <div><div class="lbl">Date</div><div class="val">${today}</div></div>
+      <div><div class="lbl">Roof type</div><div class="val">${TYPE_LABELS[currentType]}</div></div>
+      <div style="grid-column: span 2;"><div class="lbl">Property</div><div class="val">${address.replace(/</g,'&lt;')}</div></div>
+      <div><div class="lbl">Total roof area</div><div class="val">${e.area.toFixed(1)} m²</div></div>
+      <div><div class="lbl">Average pitch</div><div class="val">${currentPitch}°</div></div>
+    </div>
+
+    ${shapes.length > 0 ? `
+    <h2>Measurement Breakdown</h2>
+    <table>
+      <thead><tr><th>Section</th><th class="right">Footprint</th><th class="right">Pitch</th><th class="right">Multiplier</th><th class="right">Roof area</th></tr></thead>
+      <tbody>${sectionsRows}</tbody>
+      <tfoot><tr style="background:#f9fafb;"><td style="font-weight:700;">TOTALS</td><td style="text-align:right;font-weight:700;">${totalFp.toFixed(1)} m²</td><td></td><td style="font-size:10px;color:#6b7280;text-align:right;">Perimeter ${totalPeri.toFixed(1)} lm</td><td style="text-align:right;font-weight:800;color:#cc0000;">${totalRoof.toFixed(1)} m²</td></tr></tfoot>
+    </table>` : ''}
+
+    <h2>Estimate</h2>
+    <table>
+      <thead><tr><th>Item</th><th class="right">Amount</th></tr></thead>
+      <tbody>${breakdownRows}</tbody>
+      <tbody class="totals">
+        <tr class="subtotal"><td>Subtotal (excl GST)</td><td style="text-align:right;font-weight:700;">${fmtMoney(e.exclGST)}</td></tr>
+        ${gstIncluded ? '<tr class="gst"><td>GST (15%)</td><td style="text-align:right;">'+fmtMoney(e.gst)+'</td></tr>' : ''}
+        <tr class="grand"><td>TOTAL ${gstIncluded ? '(incl GST)' : '(excl GST)'}</td><td style="text-align:right;">${fmtMoney(e.total)}</td></tr>
+        <tr class="rate"><td colspan="2" style="text-align:right;">Effective rate: <strong>$${e.perM.toFixed(0)}/m²</strong></td></tr>
+      </tbody>
+    </table>
+
+    <div class="note"><strong>Note:</strong> This is an indicative estimate based on satellite measurement and the roof type / pitch selected. Final pricing is subject to a physical site measure and scope confirmation.</div>
+
+    <h2>Terms & Conditions</h2>
+    <div class="terms"><ol>${terms}</ol></div>
+
+    <div class="foot">Generated ${new Date().toLocaleString('en-NZ')} · The Roof Hub Limited · We don't cut corners — we fix them properly.</div>
+  </div>
+  <script>
+    // Auto-trigger the print dialog once the page is ready
+    window.addEventListener('load', function(){
+      setTimeout(function(){ window.print(); }, 350);
+    });
+  <\/script>
+</body>
+</html>`;
+
+  // Open in a new window. Some popup blockers will block this if not user-triggered;
+  // the click handler is the user trigger so it should pass.
+  const w = window.open('', '_blank', 'width=900,height=1100');
+  if(!w){
+    flashStatus('✗ Pop-up blocked — allow pop-ups in browser settings');
+    document.getElementById('copyStatus').style.color = '#fca5a5';
+    setTimeout(() => { document.getElementById('copyStatus').style.color = '#fbbf24'; }, 3000);
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  flashStatus('✓ Print window opened — choose "Save as PDF" in destination');
 }
 
 // ═══ INIT ═════════════════════════════════════════════════════════════
